@@ -157,7 +157,134 @@ function getDefaultTransform(lot, isHov) {
   if (skewANeg) return isHov ? "skewX(8deg) scale(1.08)"   : "skewX(8deg)";
   return isHov ? "scale(1.1)" : "scale(1)";
 }
+const AMENITIES = {
+  office: {
+    icon: "⭐",
+    title: "Aloha RV Park — Office",
+    color: "#14532d",
+    content: (
+      <div style={{ fontFamily:"sans-serif" }}>
+        <div style={{ background:"#f0fdf4", borderRadius:10, padding:14, marginBottom:16 }}>
+          <div style={{ fontWeight:700, fontSize:14, color:"#14532d", marginBottom:8 }}>🕐 Business Hours</div>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:14, marginBottom:5 }}>
+            <span style={{ color:"#6b7280" }}>Monday – Friday</span>
+            <span style={{ fontWeight:600 }}>8:00 AM – 5:00 PM</span>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:14 }}>
+            <span style={{ color:"#6b7280" }}>Saturday</span>
+            <span style={{ fontWeight:600 }}>10:00 AM – 3:00 PM</span>
+          </div>
+        </div>
+        <div style={{ fontSize:14, marginBottom:8 }}>
+          <span style={{ fontSize:18 }}>📞</span>{" "}
+          <a href="tel:6892520567" style={{ color:"#14532d", fontWeight:600, textDecoration:"none" }}>(689) 252-0567</a>
+        </div>
+        <div style={{ fontSize:14 }}>
+          <span style={{ fontSize:18 }}>✉️</span>{" "}
+          <a href="mailto:info@aloharvpark.com" style={{ color:"#14532d", fontWeight:600, textDecoration:"none" }}>info@aloharvpark.com</a>
+        </div>
+      </div>
+    ),
+  },
+  pool: {
+    icon: "🏊",
+    title: "Pool",
+    color: "#0369a1",
+    content: (
+      <div style={{ fontFamily:"sans-serif" }}>
+        <div style={{ background:"#f0f9ff", borderRadius:10, padding:14 }}>
+          <div style={{ fontWeight:700, fontSize:14, color:"#0369a1", marginBottom:8 }}>🕐 Pool Hours</div>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:14 }}>
+            <span style={{ color:"#6b7280" }}>Daily</span>
+            <span style={{ fontWeight:600 }}>9:00 AM – 9:00 PM</span>
+          </div>
+        </div>
+      </div>
+    ),
+  },
+  propane: {
+    icon: "🔥",
+    title: "Propane Station",
+    color: "#b45309",
+    content: (
+      <div style={{ fontFamily:"sans-serif" }}>
+        <div style={{ background:"#fffbeb", borderRadius:10, padding:14, marginBottom:14 }}>
+          <div style={{ fontWeight:700, fontSize:14, color:"#b45309", marginBottom:8 }}>🕐 Hours</div>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:14 }}>
+            <span style={{ color:"#6b7280" }}>Daily</span>
+            <span style={{ fontWeight:600 }}>10:00 AM – 5:00 PM</span>
+          </div>
+        </div>
+        <div style={{ background:"#fef3c7", borderRadius:8, padding:12, marginBottom:14, fontSize:13, color:"#78350f", lineHeight:1.6 }}>
+          ⚠️ <strong>Please note:</strong> Hours may vary during severe weather, hurricanes, emergency conditions, or other unexpected events. Please call ahead before visiting.
+        </div>
+        <a href="https://aloharvpark.com/propane" target="_blank" rel="noreferrer"
+          style={{ display:"block", background:"linear-gradient(135deg,#b45309,#f59e0b)", color:"#fff", textAlign:"center", padding:"12px 20px", borderRadius:50, fontWeight:700, fontSize:14, textDecoration:"none" }}>
+          🔥 Pay for Propane Now
+        </a>
+      </div>
+    ),
+  },
+  storage: {
+    icon: "🚐",
+    title: "RV Storage Area",
+    color: "#4b5563",
+    content: (
+      <div style={{ fontFamily:"sans-serif" }}>
+        <div style={{ background:"#f0fdf4", borderRadius:10, padding:14, marginBottom:14, display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ width:16, height:16, borderRadius:4, background:"#16a34a" }} />
+          <span style={{ fontWeight:700, fontSize:16, color:"#14532d" }}>Available</span>
+        </div>
+        <p style={{ fontSize:14, color:"#555", marginBottom:14 }}>
+          RV Storage is currently available. Contact the office to reserve your spot.
+        </p>
+        <div style={{ fontSize:14, marginBottom:6 }}>
+          📞 <a href="tel:6892520567" style={{ color:"#14532d", fontWeight:600, textDecoration:"none" }}>(689) 252-0567</a>
+        </div>
+        <div style={{ fontSize:14 }}>
+          ✉️ <a href="mailto:info@aloharvpark.com" style={{ color:"#14532d", fontWeight:600, textDecoration:"none" }}>info@aloharvpark.com</a>
+        </div>
+      </div>
+    ),
+  },
+  shuffleboard: {
+    icon: "🏅",
+    title: "Recreation Court",
+    color: "#7c3aed",
+    content: (
+      <div style={{ fontFamily:"sans-serif" }}>
+        <div style={{ background:"#f5f3ff", borderRadius:10, padding:14, marginBottom:10 }}>
+          <div style={{ fontWeight:700, fontSize:14, color:"#7c3aed", marginBottom:8 }}>🕐 Hours</div>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:14 }}>
+            <span style={{ color:"#6b7280" }}>Daily</span>
+            <span style={{ fontWeight:600 }}>9:00 AM – 9:00 PM</span>
+          </div>
+        </div>
+        <p style={{ fontSize:13, color:"#6b7280", margin:0 }}>
+          Includes Shuffleboard & Basketball courts. Available to all registered guests.
+        </p>
+      </div>
+    ),
+  },
+};
 
+function AmenityModal({ info, onClose }) {
+  return (
+    <div style={overlay}>
+      <div style={{ ...modal, maxWidth:400 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <span style={{ fontSize:28 }}>{info.icon}</span>
+            <h2 style={{ ...mh2, margin:0, color: info.color }}>{info.title}</h2>
+          </div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:"#888" }}>✕</button>
+        </div>
+        {info.content}
+        <button onClick={onClose} style={{ ...btnSecondary, marginTop:16, width:"100%" }}>Close</button>
+      </div>
+    </div>
+  );
+}
 // ── Booking Modal ──────────────────────────────────────────────────────────────
 function BookingModal({ lot, status, onClose, onConfirm }) {
   const [step, setStep] = useState(1);
@@ -287,6 +414,7 @@ export default function AlohaMap() {
   const [draftLots, setDraftLots]       = useState(LOTS);
   const [lotShapes, setLotShapes]       = useState({});
   const [activeEditLot, setActiveEditLot] = useState(null);
+const [amenity, setAmenity] = useState(null);
   const containerRef = useRef(null);
   const [scale, setScale] = useState({ w:900, h:1130 });
 
@@ -486,7 +614,12 @@ export default function AlohaMap() {
         </div>
       )}
 
-      {/* Booking modal — only in non-edit mode */}
+    {/* Amenity modals */}
+      {!EDIT_MODE && amenity && (
+        <AmenityModal info={amenity} onClose={() => setAmenity(null)} />
+      )}
+
+      {/* Booking modal */}
       {!EDIT_MODE && selected && (
         <BookingModal
           lot={selected.lot}
