@@ -315,7 +315,11 @@ export default function AlohaMap() {
 
       <div style={{ padding:"16px 16px 0", textAlign:"center" }}>
         <p style={{ color:"#166534", fontWeight:600, margin:0, fontSize:14 }}>
-          Click any <span style={{ color:"#16a34a" }}>● green lot</span> to reserve it. Hover to see the lot number.
+          {EDIT_MODE && draggingLot && (
+  <div style={{ marginTop:8, fontSize:13, color:"#14532d", fontWeight:700 }}>
+    Moving {draggingLot.lot}: {draggingLot.lot}: [{draftLots[draggingLot.lot].join(", ")}]
+  </div>
+)}
         </p>
       </div>
 
