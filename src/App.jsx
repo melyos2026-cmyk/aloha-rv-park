@@ -374,7 +374,6 @@ export default function AlohaMap() {
             const status = statuses[lot] || "available";
             const isHov  = hover === lot;
             const isEdit = EDIT_MODE && activeEditLot === lot;
-            const yClamp = Math.min(y, 97);
             const shape  = lotShapes[lot];
             const borderRadius =
               shape === "circle"  ? "50%" :
@@ -393,9 +392,9 @@ export default function AlohaMap() {
                 style={{
                   position:   "absolute",
                   left:       `${x}%`,
-                  top:        `${yClamp}%`,
+                  top:        `${y}%`,
                   width:      `${w}%`,
-                  height:     `${Math.min(h,6.5)}%`,
+                  height:     `${h}%`,
                   background: isEdit
                     ? "rgba(251,191,36,0.85)"
                     : isHov
