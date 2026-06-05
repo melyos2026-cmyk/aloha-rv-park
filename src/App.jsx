@@ -311,8 +311,21 @@ function AmenityModal({ info, onClose }) {
 function BookingModal({ lot, status, onClose, onConfirm }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ arrival:"", departure:"", name:"", email:"", phone:"", type:"daily" });
+  const [lotInfo, setLotInfo] = useState(null);
 
-  const rates = { daily:45, weekly:38, monthly:28, longterm:22 };
+  useEffect(() => {
+    import('./supabase.js').then(({ supabase }) => {
+      supabase.from('lots').select('*').eq('id', lot).single().then(({ data }) => {
+        if (data) setLotInfo(data);
+      });
+    });
+  }, [lot]);
+
+  const rates = lotInfo ? {
+    daily: lotInfo.daily_rate,
+    weekly: lotInfo.weekly_rate,
+    monthly: lotInfo.monthly_peak,
+  } : { daily:40, weekly:225, monthly:750 };
   const nights = form.arrival && form.departure
     ? Math.max(0, Math.round((new Date(form.departure) - new Date(form.arrival)) / 86400000))
     : 0;
@@ -339,10 +352,20 @@ function BookingModal({ lot, status, onClose, onConfirm }) {
   return (
     <div style={overlay}>
       <div style={{ ...modal, maxWidth:480 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <h2 style={mh2}>Book Lot {lot}</h2>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:"#888" }}>✕</button>
         </div>
+        {lotInfo && (
+          <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+            <span style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:6, padding:"4px 10px", fontSize:12, fontFamily:"sans-serif", color:"#16a34a", fontWeight:600 }}>
+              ⚡ {lotInfo.amps} Amps
+            </span>
+            <span style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:6, padding:"4px 10px", fontSize:12, fontFamily:"sans-serif", color:"#1d4ed8", fontWeight:600 }}>
+              📏 Max {lotInfo.max_feet} ft
+            </span>
+          </div>
+        )}
 
         <div style={{ display:"flex", gap:0, marginBottom:24 }}>
           {["Dates","Info","Confirm"].map((s,i) => (
@@ -370,7 +393,7 @@ function BookingModal({ lot, status, onClose, onConfirm }) {
             <div style={{ marginBottom:20 }}>
               <label style={lbl}>Stay Type</label>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                {[["daily","Daily","$45/night"],["weekly","Weekly","$38/night"],["monthly","Monthly","$28/night"],["longterm","Long-Term","$22/night"]].map(([v,l,r])=>(
+                {[["daily","Daily","$"+(lotInfo?.daily_rate||40)+"/night"],["weekly","Weekly","$"+(lotInfo?.weekly_rate||225)+"/week"],["monthly","Monthly","$"+(lotInfo?.monthly_peak||750)+"/month"]].map(([v,l,r])=>(
                   <div key={v} onClick={()=>setForm({...form,type:v})}
                     style={{ border:`2px solid ${form.type===v?"#16a34a":"#d1fae5"}`, background:form.type===v?"#f0fdf4":"#fff", borderRadius:8, padding:"10px 12px", cursor:"pointer" }}>
                     <div style={{ fontWeight:700, fontSize:13, fontFamily:"sans-serif" }}>{l}</div>
