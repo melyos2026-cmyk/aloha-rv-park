@@ -553,9 +553,10 @@ const [activeMarker, setActiveMarker] = useState(null);
             return (
               <div
                 key={lot}
-                onClick={() => {
-                  if (EDIT_MODE) { setActiveEditLot(lot); return; }
+               onClick={() => {
+                  if (EDIT_MODE) { setActiveEditLot(lot); setActiveMarker(null); return; }
                   setSelected({ lot, status });
+                }}
                 }}
                 onMouseEnter={() => setHover(lot)}
                 onMouseLeave={() => setHover(null)}
