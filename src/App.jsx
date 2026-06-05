@@ -707,11 +707,11 @@ const [activeMarker, setActiveMarker] = useState(null);
           Size: {draftMarkers[activeMarker]?.size || 28}px
         </span>
       </div>
-    </div>
+   </div>
     <div style={{ background:"#f9fafb", borderRadius:8, padding:10 }}>
       <div style={{ fontSize:12, color:"#6b7280", marginBottom:4 }}>Copy coordinate:</div>
       <pre style={{ margin:0, fontSize:12, color:"#14532d", fontFamily:"monospace", userSelect:"all" }}>
-{`${activeMarker}: { x: ${draftMarkers[activeMarker].x}, y: ${draftMarkers[activeMarker].y}, size: ${draftMarkers[activeMarker].size || 28} },`}
+        {activeMarker + ": { x: " + draftMarkers[activeMarker].x + ", y: " + draftMarkers[activeMarker].y + ", size: " + (draftMarkers[activeMarker].size || 28) + " },"}
       </pre>
     </div>
   </div>
