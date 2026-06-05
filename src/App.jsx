@@ -4,7 +4,7 @@ const MAP_IMG = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBAUE
 const AMENITY_MARKERS = {
   office:       { x: 56.5, y: 20,  icon: "⭐",  key: "office", size: 12 },
   pool:         { x: 67,   y: 18,  icon: "🏊",  key: "pool", size: 12 },
-  propane:      { x: 67,   y: 18,  icon: "⛽",  key: "propane", size: 22 },
+  propane:      { x: 52,   y: 10,  icon: "⛽",  Key: "propane", size: 22 },
   storage:      { x: 88.5, y: 57,  icon: "🚐",  key: "storage", size: 20 },
   shuffleboard: { x: 39.5, y: 9,   icon: "⛹️", key: "shuffleboard", size: 16 },
 };
