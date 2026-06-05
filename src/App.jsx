@@ -540,7 +540,7 @@ const [activeMarker, setActiveMarker] = useState(null);
             const shape  = lotShapes[lot];
             const borderRadius =
               shape === "circle"  ? "50%" :
-              shape === "rounded" ? 12    : 3;
+              shape === "rounded" ? 12    : 0;
               const autoParaRight = /^D([1-9]|10|11|12|13|14|15|16|17|18|19)$/.test(lot);
             const autoParaLeft  = /^C([1-8])$/.test(lot);
 
