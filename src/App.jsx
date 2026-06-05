@@ -12,7 +12,7 @@ const AMENITY_MARKERS = {
 // Based on the 900x1130 resized map image
 const LOTS = {
   // Section A - top row (A8 to A1, right to left)
-A8: [7.7, 18.0, 3.3, 4.2],,
+A8: [7.7, 18.0, 3.3, 4.2],
 A7: [11.6, 18.0, 3.6, 4.2],
 A6: [15.8, 18.1, 3.6, 4.2],
 A5: [20.3, 18.2, 3.6, 4.2],
