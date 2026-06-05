@@ -120,7 +120,7 @@ D18: [74.7, 25.5, 5, 3.6],
 
 const ALL_LOTS = Object.keys(LOTS);
 
-const EDIT_MODE = true;
+const EDIT_MODE = false;
 
 const STATUS_COLORS = {
   available:   "rgba(34,197,94,0.65)",
