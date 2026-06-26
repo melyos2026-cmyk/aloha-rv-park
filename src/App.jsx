@@ -792,7 +792,7 @@ export default function AlohaMap() {
               const currentContent = atob(fileData.content.replace(/\n/g, ""));
               // Replace LOTS in file
               const lotsStr = "const LOTS = {\n" + Object.entries(draftLots).map(([k,v])=>`  ${k}: [${v.map(n=>n.toFixed(1)).join(", ")}],`).join("\n") + "\n};";
-              const newContent = currentContent.replace(/const LOTS = \{[\s\S]*?\};/, lotsStr);
+              const newContent = currentContent.replace(/const LOTS = \{[\s\S]*\};/, lotsStr);
               // Commit
               const updateRes = await fetch(`https://api.github.com/repos/${repo}/contents/src/App.jsx`, {
                 method: "PUT",
