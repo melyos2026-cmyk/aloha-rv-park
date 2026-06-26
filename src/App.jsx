@@ -583,14 +583,14 @@ export default function AlohaMap() {
             <Rnd
               key={item.id}
               position={{ x: item.x / 100 * (scale.w || 900), y: item.y / 100 * (scale.h || 1130) }}
-              size={{ width: 40, height: 40 }}
+              size={{ width: 24, height: 24 }}
               onDragStop={(e, d) => {
                 const nx = Math.round(d.x / (scale.w || 900) * 1000) / 10;
                 const ny = Math.round(d.y / (scale.h || 1130) * 1000) / 10;
                 setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, x: nx, y: ny } : em));
               }}
               enableResizing={false}
-              style={{ fontSize:28, display:"flex", alignItems:"center", justifyContent:"center", cursor:"move", zIndex:100, transform: `rotate(${emojiRotations[item.id] || 0}deg)` }}
+              style={{ fontSize:17, display:"flex", alignItems:"center", justifyContent:"center", cursor:"move", zIndex:100, transform: `rotate(${emojiRotations[item.id] || 0}deg)` }}
             >
               {item.emoji}
               {EDIT_MODE && (
