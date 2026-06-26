@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Rnd } from "react-rnd";
 
-const MAP_IMG = "/Aloha_Rv_Park.png";
+const MAP_IMG = "/AlohaRvParkMap.png";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
