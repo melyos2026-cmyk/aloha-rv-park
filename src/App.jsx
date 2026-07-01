@@ -837,25 +837,19 @@ export default function AlohaMap() {
               await saveToSupabase('emojiRotations', 'all', emojiRotations);
               await saveToSupabase('textRotations', 'all', textRotations);
 
-              const token = import.meta.env.VITE_GITHUB_TOKEN;
-              const repo = import.meta.env.VITE_GITHUB_REPO;
-              console.log("VITE_GITHUB_TOKEN:", token ? `set (${token.slice(0,8)}...)` : "UNDEFINED");
-              console.log("VITE_GITHUB_REPO:", repo || "UNDEFINED");
               // Get current file SHA
-              const fileRes = await fetch(`https://api.github.com/repos/${repo}/contents/src/App.jsx`, {
-                headers: { Authorization: `token ${token}`, Accept: "application/vnd.github.v3+json" }
-              });
+              const fileRes = await fetch('/api/save-to-github');
               const fileData = await fileRes.json();
               const sha = fileData.sha;
-              const currentContent = atob(fileData.content.replace(/\n/g, ""));
+              const currentContent = new TextDecoder("utf-8").decode(Uint8Array.from(atob(fileData.content.replace(/\n/g,"")), c => c.charCodeAt(0)));
               // Replace LOTS in file
               const lotsStr = "const LOTS = {\n" + Object.entries(draftLots).map(([k,v])=>`  ${k}: [${v.map(n=>n.toFixed(1)).join(", ")}],`).join("\n") + "\n};";
-              const newContent = currentContent.replace(/const LOTS = \{[\s\S]*\};/, lotsStr);
+              const newContent = currentContent.replace(/const LOTS = \{[\s\S]*?\};/, lotsStr);
               // Commit
-              const updateRes = await fetch(`https://api.github.com/repos/${repo}/contents/src/App.jsx`, {
+              const updateRes = await fetch('/api/save-to-github', {
                 method: "PUT",
-                headers: { Authorization: `token ${token}`, Accept: "application/vnd.github.v3+json", "Content-Type": "application/json" },
-                body: JSON.stringify({ message: "Update lot coordinates from map editor", content: btoa(String.fromCharCode(...new TextEncoder().encode(newContent))), sha })
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: "Update lot coordinates from map editor", content: btoa(unescape(encodeURIComponent(newContent))), sha })
               });
               if (updateRes.ok) {
                 alert("Saved to GitHub! Vercel will deploy in ~30 seconds.");
