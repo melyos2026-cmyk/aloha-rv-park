@@ -665,10 +665,20 @@ export default function AlohaMap() {
                       </div>
                     )}
                     {item.emoji === "⛽" && item.label && item.label.toLowerCase().includes("propane") && (
-                      <a href="https://buy.stripe.com/eVqcN6f0r0CQaNAeGfbo400" target="_blank" rel="noopener noreferrer"
-                        style={{ display:"block", marginTop:16, background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 20px", borderRadius:50, fontWeight:700, fontSize:15, fontFamily:"sans-serif", textDecoration:"none" }}>
-                        Pay Online
-                      </a>
+                      <div style={{ marginTop:16 }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:10 }}>
+                          {[["20 LB","$18"],["30 LB","$30"],["40 LB","$36"]].map(([size,price])=>(
+                            <div key={size} style={{ background:"#f0fdf4", borderRadius:10, padding:"8px 4px", textAlign:"center", border:"1px solid #16a34a" }}>
+                              <div style={{ fontSize:12, fontWeight:700, color:"#14532d" }}>{size}</div>
+                              <div style={{ fontSize:14, fontWeight:800, color:"#16a34a" }}>{price}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <a href="https://buy.stripe.com/eVqcN6f0r0CQaNAeGfbo400" target="_blank" rel="noopener noreferrer"
+                          style={{ display:"block", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 20px", borderRadius:50, fontWeight:700, fontSize:15, fontFamily:"sans-serif", textDecoration:"none", boxShadow:"0 4px 12px rgba(22,163,74,0.3)" }}>
+                          💳 Pay Online
+                        </a>
+                      </div>
                     )}
                     <div style={{ marginTop:16, textAlign:"center" }}>
                       <div style={{ fontSize:11, color:"#9ca3af", fontFamily:"sans-serif" }}>🌺 Aloha RV Park · Kissimmee, FL</div>
