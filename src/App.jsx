@@ -627,9 +627,7 @@ export default function AlohaMap() {
                   <textarea
                     value={item.info || ""}
                     onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, info: e.target.value } : em))}
-                    placeholder={"Hours: 9am-9pm
-Rules: No running
-Price: Free"}
+                    placeholder="Hours: 9am-9pm&#10;Rules: No running&#10;Price: Free"
                     rows={3}
                     style={{ width:"100%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, marginBottom:6, boxSizing:"border-box", resize:"vertical" }}
                   />
