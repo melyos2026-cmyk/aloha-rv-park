@@ -56,7 +56,6 @@ async function loadFromSupabase(type) {
 
 // ═══ Lot coordinate definitions [x_pct, y_pct, w_pct, h_pct] ═══
 // Based on the 900x1130 resized map image
-const EDIT_MODE = true;
 
 const LOTS = {
   A8: [9.0, 16.7, 4.1, 5.3],
@@ -155,22 +154,6 @@ const LOTS = {
 };
 
 const ALL_LOTS = Object.keys(LOTS);
-
-const AMENITIES = [
-  { id: 'office', emoji: '🏢', x: 43.5, y: 22.0, label: 'Office', info: 'Office hours: Mon-Fri 9am-5pm, Sat 9am-12pm' },
-  { id: 'pool', emoji: '🏊', x: 57.0, y: 22.0, label: 'Pool', info: 'Pool open daily 8am-10pm' },
-  { id: 'shuffleboard', emoji: '🎯', x: 30.0, y: 10.5, label: 'Shuffleboard', info: 'Shuffleboard court - open 24/7' },
-  { id: 'propane', emoji: '⛽', x: 52.0, y: 10.5, label: 'Propane Station', info: 'Propane available - contact office for pricing' },
-  { id: 'garbage', emoji: '🗑️', x: 57.5, y: 10.5, label: 'Garbage', info: 'Garbage pickup Mon & Thu' },
-  { id: 'firepit', emoji: '🔥', x: 68.5, y: 22.0, label: 'Fire Pit', info: 'Community fire pit - open daily dusk to 11pm' },
-  { id: 'laundry', emoji: '🧺', x: 72.5, y: 68.0, label: 'Laundry 24/7', info: 'Laundry room open 24/7 - bring quarters' },
-  { id: 'mens-restroom', emoji: '🚹', x: 72.5, y: 63.0, label: "Men's Restrooms & Showers", info: "Men's restrooms and showers - open 24/7" },
-  { id: 'womens-restroom', emoji: '🚺', x: 72.5, y: 73.0, label: "Women's Restrooms & Showers", info: "Women's restrooms and shower - open 24/7" },
-  { id: 'storage', emoji: '🅿️', x: 83.0, y: 68.0, label: 'RV Storage Area', info: 'RV Storage available - contact office for rates and availability' },
-  { id: 'rechall', emoji: '🏛️', x: 83.0, y: 15.0, label: 'Rec Hall', info: 'Recreation Hall - available for events, contact office to reserve' },
-  { id: 'basketball', emoji: '⛹🏽', x: 57.0, y: 15.0, label: 'Basketball', info: 'Basketball court - open 24/7' },
-  { id: 'ambulance', emoji: '🚑', x: 2.0, y: 5.0, label: 'Emergency', info: 'Emergency - Call 911' },
-];
 
 const STATUS_COLORS = {
   available:   "rgba(34,197,94,0.65)",
@@ -341,7 +324,8 @@ export default function AlohaMap() {
   const [lotShapes, setLotShapes] = useState({});
   const [dragging, setDragging] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [activeAmenity, setActiveAmenity] = useState(null);
+  const [editMode, setEditMode] = useState(true);
+  const [activeEmoji, setActiveEmoji] = useState(null);
 
   useEffect(() => {
     const update = () => {
@@ -466,8 +450,8 @@ export default function AlohaMap() {
         <div
           ref={containerRef}
           style={{ position:"relative", width:"100%", maxWidth:900, display:"inline-block", userSelect:"none" }}
-          onClick={() => setActiveAmenity(null)}
-          onMouseMove={EDIT_MODE ? (e) => {
+          onClick={() => setActiveEmoji(null)}
+          onMouseMove={editMode ? (e) => {
             if (!dragging) return;
             const rect = containerRef.current.getBoundingClientRect();
             const newX = Math.round(((e.clientX - rect.left) / rect.width * 100 - dragOffset.x) * 10) / 10;
@@ -477,14 +461,14 @@ export default function AlohaMap() {
               [dragging]: [newX, newY, prev[dragging][2], prev[dragging][3]]
             }));
           } : undefined}
-          onMouseUp={EDIT_MODE ? () => {
+          onMouseUp={editMode ? () => {
             if (dragging) {
               const [x,y,w,h] = draftLots[dragging];
               console.log(`${dragging}: [${x}, ${y}, ${w}, ${h}],`);
               setDragging(null);
             }
           } : undefined}
-          onMouseLeave={EDIT_MODE ? () => setDragging(null) : undefined}
+          onMouseLeave={editMode ? () => setDragging(null) : undefined}
         >
           <img
             src={MAP_IMG}
@@ -492,10 +476,10 @@ export default function AlohaMap() {
             style={{ width:"100%", height:"auto", display:"block", borderRadius:12, boxShadow:"0 4px 24px rgba(0,0,0,0.18)" }}
           />
           {/* Snap Lines */}
-          {EDIT_MODE && snapLines.x !== null && (
+          {editMode && snapLines.x !== null && (
             <div style={{ position:"absolute", left:snapLines.x, top:0, width:1, height:"100%", background:"#f59e0b", zIndex:1000, pointerEvents:"none" }} />
           )}
-          {EDIT_MODE && snapLines.y !== null && (
+          {editMode && snapLines.y !== null && (
             <div style={{ position:"absolute", top:snapLines.y, left:0, height:1, width:"100%", background:"#f59e0b", zIndex:1000, pointerEvents:"none" }} />
           )}
           {/* Lot overlays */}
@@ -513,7 +497,7 @@ export default function AlohaMap() {
             const py = y / 100 * mapH;
             const pw = w / 100 * mapW;
             const ph = h / 100 * mapH;
-            if (EDIT_MODE) {
+            if (editMode) {
               return (
                 <Rnd
                   key={lot}
@@ -601,7 +585,7 @@ export default function AlohaMap() {
             >
               <div style={{ fontSize:item.size, color:item.color, fontWeight:700, textShadow:"0 1px 3px rgba(0,0,0,0.5)", whiteSpace:"nowrap", userSelect:"none" }}>
                 {item.text}
-                {EDIT_MODE && (
+                {editMode && (
                   <button onClick={()=>setTexts(prev=>prev.filter(t=>t.id!==item.id))}
                     style={{ position:"absolute", top:-8, right:-8, background:"#ef4444", color:"#fff", border:"none", borderRadius:"50%", width:16, height:16, fontSize:10, cursor:"pointer", lineHeight:"16px", textAlign:"center" }}>x</button>
                 )}
@@ -620,45 +604,49 @@ export default function AlohaMap() {
                 setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, x: nx, y: ny } : em));
               }}
               enableResizing={false}
-              style={{ fontSize:17, display:"flex", alignItems:"center", justifyContent:"center", cursor:"move", zIndex:100, transform: `rotate(${emojiRotations[item.id] || 0}deg)` }}
+              disableDragging={!editMode}
+              style={{ fontSize:17, display:"flex", alignItems:"center", justifyContent:"center", cursor: editMode ? "move" : "default", zIndex:100 }}
             >
-              {item.emoji}
-              {EDIT_MODE && (
-                <button onClick={()=>setEmojis(prev=>prev.filter(em=>em.id!==item.id))}
-                  style={{ position:"absolute", top:-8, right:-8, background:"#ef4444", color:"#fff", border:"none", borderRadius:"50%", width:16, height:16, fontSize:10, cursor:"pointer", lineHeight:"16px", textAlign:"center" }}>x</button>
+              <span
+                onClick={e => { e.stopPropagation(); if (editMode) setActiveEmoji(activeEmoji === item.id ? null : item.id); }}
+                style={{ lineHeight:1, userSelect:"none" }}
+              >{item.emoji}</span>
+              {editMode && activeEmoji === item.id && (
+                <div onClick={e => e.stopPropagation()} style={{ position:"absolute", bottom:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)", background:"#fff", border:"1.5px solid #d1d5db", borderRadius:8, padding:"8px 10px", minWidth:160, boxShadow:"0 4px 12px rgba(0,0,0,0.2)", zIndex:500, fontFamily:"sans-serif" }}>
+                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:4 }}>Label (tooltip)</div>
+                  <input
+                    value={item.label || ""}
+                    onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, label: e.target.value } : em))}
+                    placeholder="e.g. Pool, Office..."
+                    style={{ width:"100%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, marginBottom:6, boxSizing:"border-box" }}
+                  />
+                  <button
+                    onClick={() => { setEmojis(prev => prev.filter(em => em.id !== item.id)); setActiveEmoji(null); }}
+                    style={{ background:"#ef4444", color:"#fff", border:"none", borderRadius:6, padding:"5px 10px", cursor:"pointer", fontSize:12, width:"100%", fontWeight:600 }}
+                  >Delete</button>
+                </div>
+              )}
+              {!editMode && item.label && (
+                <div style={{ position:"absolute", bottom:"calc(100% + 4px)", left:"50%", transform:"translateX(-50%)", background:"rgba(0,0,0,0.75)", color:"#fff", fontSize:10, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap", pointerEvents:"none", fontFamily:"sans-serif" }}>{item.label}</div>
               )}
             </Rnd>
           ))}
 
-          {/* Amenity Markers */}
-          {AMENITIES.map(a => {
-            const ax = a.x / 100 * (scale.w || 900);
-            const ay = a.y / 100 * (scale.h || 1130);
-            const isActive = activeAmenity === a.id;
-            return (
-              <div key={a.id} style={{ position:"absolute", left:ax, top:ay, zIndex:300, transform:"translate(-50%,-50%)" }}>
-                <div
-                  onClick={e => { e.stopPropagation(); setActiveAmenity(isActive ? null : a.id); }}
-                  style={{ fontSize:18, cursor:"pointer", filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.5))", userSelect:"none" }}
-                  title={a.label}
-                >
-                  {a.emoji}
-                </div>
-                {isActive && (
-                  <div style={{ position:"absolute", left:"50%", bottom:"calc(100% + 6px)", transform:"translateX(-50%)", background:"#fff", border:"1.5px solid #d1d5db", borderRadius:8, padding:"8px 10px", minWidth:180, maxWidth:220, boxShadow:"0 4px 12px rgba(0,0,0,0.15)", zIndex:400, fontFamily:"sans-serif" }}>
-                    <div style={{ fontWeight:700, fontSize:13, color:"#166534", marginBottom:4 }}>{a.emoji} {a.label}</div>
-                    <div style={{ fontSize:12, color:"#374151", lineHeight:1.4 }}>{a.info}</div>
-                    <button onClick={e => { e.stopPropagation(); setActiveAmenity(null); }} style={{ position:"absolute", top:4, right:6, background:"none", border:"none", fontSize:14, cursor:"pointer", color:"#9ca3af", lineHeight:1 }}>✕</button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
         </div>
       </div>
 
+      {/* Edit/Preview Toggle */}
+      <div style={{ maxWidth:900, margin:"0 auto 10px", display:"flex", justifyContent:"flex-end" }}>
+        <button
+          onClick={() => { setEditMode(m => !m); setActiveEmoji(null); }}
+          style={{ background: editMode ? "#f59e0b" : "#16a34a", color:"#fff", border:"none", padding:"8px 20px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700, boxShadow:"0 2px 6px rgba(0,0,0,0.15)" }}
+        >
+          {editMode ? "👁 Switch to Preview Mode" : "✏️ Switch to Edit Mode"}
+        </button>
+      </div>
+
       {/* Edit Panel */}
-      {EDIT_MODE && (
+      {editMode && (
         <div style={{ maxWidth:900, margin:"0 auto 20px", background:"#fff", border:"2px solid #f59e0b", borderRadius:14, padding:16, fontFamily:"sans-serif" }}>
           
           {/* Add Lot */}
@@ -680,11 +668,21 @@ export default function AlohaMap() {
           {/* Add Emojis */}
           <div style={{ marginBottom:14, padding:12, background:"#fef9c3", borderRadius:10 }}>
             <strong style={{ fontSize:13, color:"#854d0e" }}>Add Emoji/Sticker</strong>
-            <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap" }}>
-              {["⭐","🌴","🌳","🎄","🎃","👻","☃️","❄️","🏊","⛽","🚐","🅿️","🔥","🌺","♻️","🚻","🧺","🐄","🦌","🚑"].map(emoji=>(
+            <div style={{ fontSize:11, color:"#92400e", marginBottom:6, marginTop:2 }}>Click to place at center, then drag into position</div>
+            <div style={{ marginBottom:4, fontSize:11, color:"#6b7280", fontWeight:600 }}>AMENITIES</div>
+            <div style={{ display:"flex", gap:6, marginBottom:8, flexWrap:"wrap" }}>
+              {["🏢","🏊","🎯","⛽","🗑️","🔥","🧺","🚹","🚺","🅿️","🏛️","⛹🏽","🚑","🚐","♻️","🚻"].map(emoji=>(
                 <button key={emoji} onClick={()=>{
-                  setEmojis(prev=>[...prev, { id: Date.now(), emoji, x:50, y:50 }]);
-                }} style={{ fontSize:14, background:"none", border:"1px solid #d1d5db", borderRadius:8, padding:"4px 8px", cursor:"pointer", fontFamily:"monospace" }}>{emoji}</button>
+                  setEmojis(prev=>[...prev, { id: Date.now(), emoji, x:50, y:50, label:"" }]);
+                }} style={{ fontSize:16, background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:8, padding:"4px 8px", cursor:"pointer" }}>{emoji}</button>
+              ))}
+            </div>
+            <div style={{ marginBottom:4, fontSize:11, color:"#6b7280", fontWeight:600 }}>NATURE & DECOR</div>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {["⭐","🌴","🌳","🎄","🎃","👻","☃️","❄️","🌺","🐄","🦌","🔥"].map(emoji=>(
+                <button key={emoji} onClick={()=>{
+                  setEmojis(prev=>[...prev, { id: Date.now(), emoji, x:50, y:50, label:"" }]);
+                }} style={{ fontSize:16, background:"none", border:"1px solid #d1d5db", borderRadius:8, padding:"4px 8px", cursor:"pointer" }}>{emoji}</button>
               ))}
             </div>
           </div>
