@@ -671,9 +671,7 @@ export default function AlohaMap() {
                 </div>
               )}
 
-              {!editMode && !activeEmoji && item.label && (
-                <div style={{ position:"absolute", bottom:"calc(100% + 4px)", left:"50%", transform:"translateX(-50%)", background:"rgba(0,0,0,0.75)", color:"#fff", fontSize:10, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap", pointerEvents:"none", fontFamily:"sans-serif" }}>{item.label}</div>
-              )}
+              {/* no tooltip - title only shows in popup */}
             </Rnd>
             );
           })}
