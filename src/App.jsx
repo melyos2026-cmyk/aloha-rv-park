@@ -593,11 +593,13 @@ export default function AlohaMap() {
             </Rnd>
           ))}
           {/* Emojis */}
-          {emojis.map((item) => (
+          {emojis.map((item) => {
+            const emojiSize = item.size || 24;
+            return (
             <Rnd
               key={item.id}
               position={{ x: item.x / 100 * (scale.w || 900), y: item.y / 100 * (scale.h || 1130) }}
-              size={{ width: 24, height: 24 }}
+              size={{ width: emojiSize + 8, height: emojiSize + 8 }}
               onDragStop={(e, d) => {
                 const nx = Math.round(d.x / (scale.w || 900) * 1000) / 10;
                 const ny = Math.round(d.y / (scale.h || 1130) * 1000) / 10;
@@ -605,32 +607,68 @@ export default function AlohaMap() {
               }}
               enableResizing={false}
               disableDragging={!editMode}
-              style={{ fontSize:17, display:"flex", alignItems:"center", justifyContent:"center", cursor: editMode ? "move" : "default", zIndex:100 }}
+              style={{ fontSize: emojiSize, display:"flex", alignItems:"center", justifyContent:"center", cursor: editMode ? "move" : "pointer", zIndex:100 }}
             >
               <span
-                onClick={e => { e.stopPropagation(); if (editMode) setActiveEmoji(activeEmoji === item.id ? null : item.id); }}
+                onClick={e => { e.stopPropagation(); setActiveEmoji(activeEmoji === item.id ? null : item.id); }}
                 style={{ lineHeight:1, userSelect:"none" }}
               >{item.emoji}</span>
+
               {editMode && activeEmoji === item.id && (
-                <div onClick={e => e.stopPropagation()} style={{ position:"absolute", bottom:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)", background:"#fff", border:"1.5px solid #d1d5db", borderRadius:8, padding:"8px 10px", minWidth:160, boxShadow:"0 4px 12px rgba(0,0,0,0.2)", zIndex:500, fontFamily:"sans-serif" }}>
-                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:4 }}>Label (tooltip)</div>
+                <div onClick={e => e.stopPropagation()} style={{ position:"absolute", bottom:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)", background:"#fff", border:"1.5px solid #d1d5db", borderRadius:10, padding:"10px 12px", minWidth:210, boxShadow:"0 4px 16px rgba(0,0,0,0.2)", zIndex:500, fontFamily:"sans-serif" }}>
+                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>POPUP TITLE</div>
                   <input
                     value={item.label || ""}
                     onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, label: e.target.value } : em))}
                     placeholder="e.g. Pool, Office..."
                     style={{ width:"100%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, marginBottom:6, boxSizing:"border-box" }}
                   />
+                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>POPUP INFO (one per line)</div>
+                  <textarea
+                    value={item.info || ""}
+                    onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, info: e.target.value } : em))}
+                    placeholder={"Hours: 9am-9pm
+Rules: No running
+Price: Free"}
+                    rows={3}
+                    style={{ width:"100%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, marginBottom:6, boxSizing:"border-box", resize:"vertical" }}
+                  />
+                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>SIZE: {emojiSize}px</div>
+                  <input
+                    type="range" min="12" max="80" value={emojiSize}
+                    onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, size: parseInt(e.target.value) } : em))}
+                    style={{ width:"100%", marginBottom:8 }}
+                  />
                   <button
                     onClick={() => { setEmojis(prev => prev.filter(em => em.id !== item.id)); setActiveEmoji(null); }}
                     style={{ background:"#ef4444", color:"#fff", border:"none", borderRadius:6, padding:"5px 10px", cursor:"pointer", fontSize:12, width:"100%", fontWeight:600 }}
-                  >Delete</button>
+                  >🗑 Delete</button>
                 </div>
               )}
-              {!editMode && item.label && (
+
+              {!editMode && activeEmoji === item.id && (item.label || item.info) && (
+                <div onClick={e => e.stopPropagation()} style={{ position:"fixed", top:"50%", left:"50%", transform:"translate(-50%,-50%)", background:"#fff", border:"2px solid #16a34a", borderRadius:16, padding:"20px 24px", minWidth:260, maxWidth:320, boxShadow:"0 24px 64px rgba(0,0,0,0.35)", zIndex:2000, fontFamily:"sans-serif" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                    <div style={{ fontSize:18, fontWeight:700, color:"#14532d" }}>{item.emoji} {item.label}</div>
+                    <button onClick={()=>setActiveEmoji(null)} style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#888" }}>✕</button>
+                  </div>
+                  {item.info && (
+                    <div style={{ background:"#f0fdf4", borderRadius:10, padding:"10px 14px" }}>
+                      {item.info.split("
+").map((line, i) => (
+                        <p key={i} style={{ margin:"0 0 6px", fontSize:13, color:"#166534", fontWeight:600 }}>{line}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!editMode && !activeEmoji && item.label && (
                 <div style={{ position:"absolute", bottom:"calc(100% + 4px)", left:"50%", transform:"translateX(-50%)", background:"rgba(0,0,0,0.75)", color:"#fff", fontSize:10, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap", pointerEvents:"none", fontFamily:"sans-serif" }}>{item.label}</div>
               )}
             </Rnd>
-          ))}
+            );
+          })}
 
         </div>
       </div>
