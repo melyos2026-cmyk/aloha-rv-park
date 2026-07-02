@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import PropaneCheckoutModal from './components/PropaneCheckoutModal';
 import { Rnd } from "react-rnd";
 
 const MAP_IMG = "/AlohaRvParkMap.png";
@@ -326,6 +327,7 @@ export default function AlohaMap() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [editMode, setEditMode] = useState(true);
   const [activeEmoji, setActiveEmoji] = useState(null);
+  const [propaneModalLotId, setPropaneModalLotId] = useState(null);
 
   useEffect(() => {
     const update = () => {
@@ -664,22 +666,14 @@ export default function AlohaMap() {
                         ))}
                       </div>
                     )}
-                    {item.emoji === "⛽" && item.label && item.label.toLowerCase().includes("propane") && (
+                    {item.emoji === "⛽" && item.label && (item.label.toLowerCase().includes("propane") || item.label.toLowerCase().includes("propano")) && (
                       <div style={{ marginTop:16 }}>
-                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:10 }}>
-                          {[["20 LB","$18"],["30 LB","$30"],["40 LB","$36"]].map(([size,price])=>(
-                            <div key={size} style={{ background:"#f0fdf4", borderRadius:10, padding:"8px 4px", textAlign:"center", border:"1px solid #16a34a" }}>
-                              <div style={{ fontSize:12, fontWeight:700, color:"#14532d" }}>{size}</div>
-                              <div style={{ fontSize:14, fontWeight:800, color:"#16a34a" }}>{price}</div>
-                            </div>
-                          ))}
-                        </div>
-                        <a href="https://buy.stripe.com/eVqcN6f0r0CQaNAeGfbo400" target="_blank" rel="noopener noreferrer"
-                          style={{ display:"block", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 20px", borderRadius:50, fontWeight:700, fontSize:15, fontFamily:"sans-serif", textDecoration:"none", boxShadow:"0 4px 12px rgba(22,163,74,0.3)", marginBottom:10 }}>
-                          💳 Pay Online
-                        </a>
+                        <button onClick={()=>setPropaneModalLotId(String(item.id))}
+                          style={{ display:"block", width:"100%", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 20px", borderRadius:50, fontWeight:700, fontSize:15, fontFamily:"sans-serif", border:"none", cursor:"pointer", boxShadow:"0 4px 12px rgba(22,163,74,0.3)", marginBottom:10 }}>
+                          💳 Buy Propane
+                        </button>
                         <a href="tel:6892520567" style={{ display:"block", background:"#f3f4f6", color:"#374151", textAlign:"center", padding:"10px 20px", borderRadius:50, fontWeight:700, fontSize:14, fontFamily:"sans-serif", textDecoration:"none", border:"1.5px solid #d1d5db" }}>
-                          📞 Forklift & Motor Home: Call (689) 252-0567
+                          📞 Questions: Call (689) 252-0567
                         </a>
                       </div>
                     )}
@@ -697,6 +691,10 @@ export default function AlohaMap() {
 
         </div>
       </div>
+
+      {propaneModalLotId && (
+        <PropaneCheckoutModal lotId={propaneModalLotId} onClose={()=>setPropaneModalLotId(null)} />
+      )}
 
       {/* Edit/Preview Toggle */}
       <div style={{ maxWidth:900, margin:"0 auto 10px", display:"flex", justifyContent:"flex-end" }}>
