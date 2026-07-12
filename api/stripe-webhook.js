@@ -142,6 +142,61 @@ export default async function handler(req, res) {
         if (lotId) {
           await updateLotStatus(lotId, 'reserved');
         }
+
+        // Try to link this storage payment to a resident and create/update
+        // a recurring charge so it auto-appears on future monthly invoices.
+        const customerEmail = session.customer_details?.email || null;
+        if (customerEmail && isSubscription === 'true') {
+          const { data: resident } = await supabase
+            .from('resident_accounts')
+            .select('id, company_id')
+            .eq('email', customerEmail)
+            .maybeSingle();
+
+          if (resident) {
+            const monthlyAmount =
+              billingType === 'monthly'
+                ? (session.amount_total || 0) / 100
+                : billingType === 'yearly'
+                ? (session.amount_total || 0) / 100 / 12
+                : (session.amount_total || 0) / 100 * 30;
+
+            const { data: existingCharge } = await supabase
+              .from('recurring_charges')
+              .select('id, storage_spaces')
+              .eq('resident_id', resident.id)
+              .eq('charge_type', 'Storage Rental')
+              .eq('source', 'stripe_storage')
+              .maybeSingle();
+
+            const spaces = existingCharge?.storage_spaces || [];
+            const updatedSpaces = lotId && !spaces.includes(lotId)
+              ? [...spaces, lotId]
+              : spaces;
+
+            if (existingCharge) {
+              await supabase
+                .from('recurring_charges')
+                .update({
+                  amount: monthlyAmount,
+                  storage_spaces: updatedSpaces,
+                  active: true,
+                })
+                .eq('id', existingCharge.id);
+            } else {
+              await supabase.from('recurring_charges').insert({
+                company_id: resident.company_id,
+                resident_id: resident.id,
+                charge_type: 'Storage Rental',
+                description: `Storage Rental (${lotId})`,
+                amount: monthlyAmount,
+                storage_spaces: lotId ? [lotId] : [],
+                active: true,
+                source: 'stripe_storage',
+              });
+            }
+          }
+        }
       } catch (err) {
         console.error('Error saving storage order:', err);
       }
