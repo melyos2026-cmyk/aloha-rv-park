@@ -40,6 +40,33 @@ async function saveLotInfo(parkId, lotKey, info) {
   return res.ok;
 }
 
+async function ensureRealEstateListing(lotKey) {
+  const checkRes = await fetch(SUPABASE_URL + '/rest/v1/real_estate_listings?park_id=eq.' + PARK_ID + '&lot_key=eq.' + lotKey, {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+  });
+  const rows = await checkRes.json();
+  if (rows.length > 0) return; // already has a listing, don't overwrite
+
+  await fetch(SUPABASE_URL + '/rest/v1/real_estate_listings', {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify({
+      park_id: PARK_ID,
+      lot_key: lotKey,
+      type: 'sale',
+      category: 'Mini Home',
+      title: 'New Listing - Lot ' + lotKey,
+      price: 'TBD',
+      available: false
+    })
+  });
+}
+
 async function loadLotInfo(parkId) {
   const res = await fetch(SUPABASE_URL + '/rest/v1/lot_info?park_id=eq.' + parkId, {
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
@@ -192,6 +219,7 @@ const STATUS_COLORS = {
   occupied:    "rgba(239,68,68,0.7)",
   reserved:    "rgba(234,179,8,0.72)",
   maintenance: "rgba(107,114,128,0.7)",
+  for_sale:    "rgba(172,103,221,0.7)",
 };
 
 const STATUS_SOLID = {
@@ -199,6 +227,7 @@ const STATUS_SOLID = {
   occupied:    "#dc2626",
   reserved:    "#ca8a04",
   maintenance: "#4b5563",
+  for_sale:    "#ac67dd",
 };
 
 // Default mock statuses
@@ -760,7 +789,7 @@ export default function AlohaMap() {
           {Object.entries(STATUS_COLORS).map(([s,c]) => (
             <div key={s} style={{ display:"flex", alignItems:"center", gap:5 }}>
               <div style={{ width:12, height:12, borderRadius:3, background:STATUS_SOLID[s] }} />
-              <span style={{ color:"#fff", fontSize:11, textTransform:"capitalize", fontWeight:600 }}>{s} ({counts[s]||0})</span>
+              <span style={{ color:"#fff", fontSize:11, textTransform:"capitalize", fontWeight:600 }}>{s.replace(/_/g," ")} ({counts[s]||0})</span>
             </div>
           ))}
         </div>
@@ -1171,8 +1200,8 @@ export default function AlohaMap() {
               <div style={{ marginBottom:12 }}>
                 <span style={{ fontSize:12, fontWeight:600, color:"#6b7280" }}>STATUS / COLOR</span>
                 <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
-                  {[["available","#16a34a","🟢 Available"],["occupied","#dc2626","🔴 Occupied"],["reserved","#ca8a04","🟡 Reserved"],["maintenance","#4b5563","⚫ Maintenance"]].map(([s,c,label])=>(
-                    <button key={s} onClick={()=>setStatuses(prev=>({...prev,[activeEditLot]:s}))}
+                  {[["available","#16a34a","🟢 Available"],["occupied","#dc2626","🔴 Occupied"],["reserved","#ca8a04","🟡 Reserved"],["maintenance","#4b5563","⚫ Maintenance"],["for_sale","#ac67dd","🏠 For Sale"]].map(([s,c,label])=>(
+                    <button key={s} onClick={()=>{ setStatuses(prev=>({...prev,[activeEditLot]:s})); if (s === "for_sale") ensureRealEstateListing(activeEditLot); }}
                       style={{ background: statuses[activeEditLot]===s ? c : "#f3f4f6", color: statuses[activeEditLot]===s ? "#fff" : "#374151", border:`2px solid ${c}`, padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600 }}>
                       {label}
                     </button>
