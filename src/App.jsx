@@ -1541,7 +1541,7 @@ export default function AlohaMap() {
                 body: JSON.stringify({ message: "Update lot coordinates from map editor", content: btoa(unescape(encodeURIComponent(newContent))), sha })
               });
               if (updateRes.ok) {
-                alert("Saved to GitHub! Vercel will deploy in ~30 seconds.");
+                alert("Changes saved! Updates will appear everywhere in ~30 seconds.");
               } else {
                 const err = await updateRes.json();
                 alert("⚠️ Error: " + err.message);
@@ -1550,7 +1550,7 @@ export default function AlohaMap() {
               alert("⚠️ Error: " + e.message);
             }
           }} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"10px 20px", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:600, width:"100%" }}>
-            Save to GitHub
+            💾 Save All Changes
           </button>
         </div>
       )}
