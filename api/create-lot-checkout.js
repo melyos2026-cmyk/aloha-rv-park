@@ -78,23 +78,30 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Lot information not found' });
     }
 
-    // Check for overlapping paid reservations on this lot
-    const { data: existingOrders, error: ordersError } = await supabase
-      .from('lot_orders')
-      .select('arrival_date, departure_date')
-      .eq('lot_id', lotId)
-      .eq('status', 'paid')
-      .not('arrival_date', 'is', null)
-      .not('departure_date', 'is', null);
+    // Check for overlapping paid reservations OR active resident leases on this lot
+    const { data: lotRow, error: lotRowErr } = await supabase
+      .from('rv_lots')
+      .select('id')
+      .eq('lot_name', lotId)
+      .single();
+
+    if (lotRowErr || !lotRow) {
+      return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    const { data: blockedRanges, error: ordersError } = await supabase.rpc(
+      'get_lot_blocked_ranges',
+      { p_lot_id: lotRow.id }
+    );
 
     if (ordersError) {
       console.error('Error checking existing orders:', ordersError);
       return res.status(500).json({ error: 'Could not verify availability' });
     }
 
-    const hasOverlap = (existingOrders || []).some((o) => {
-      const bookedStart = new Date(o.arrival_date + 'T00:00:00');
-      const bookedEnd = new Date(o.departure_date + 'T00:00:00');
+    const hasOverlap = (blockedRanges || []).some((r) => {
+      const bookedStart = new Date(r.range_start + 'T00:00:00');
+      const bookedEnd = new Date(r.range_end + 'T00:00:00');
       return arrival < bookedEnd && departure > bookedStart;
     });
 

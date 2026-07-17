@@ -327,6 +327,17 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
     return { start, end };
   });
 
+  // For the Departure calendar: shift the start forward by 1 day so that
+  // the exact arrival_date of a blocked range (e.g. a resident's move-in day)
+  // still shows as available for someone else's checkout (11am checkout vs 4pm check-in).
+  const excludeDateIntervalsForDeparture = bookedRanges.map(r => {
+    const start = new Date(r.arrival_date + "T00:00:00");
+    start.setDate(start.getDate() + 1);
+    const end = new Date(r.departure_date + "T00:00:00");
+    end.setDate(end.getDate() - 1);
+    return { start, end };
+  });
+
   function rangeOverlaps(arrivalStr, departureStr) {
     const arrival = new Date(arrivalStr + "T00:00:00");
     const departure = new Date(departureStr + "T00:00:00");
@@ -556,7 +567,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
               selected={form.departure ? new Date(form.departure + "T00:00:00") : null}
               onChange={(date) => setForm({...form, departure: date ? date.toISOString().split("T")[0] : ""})}
               minDate={form.arrival ? new Date(form.arrival + "T00:00:00") : new Date()}
-              excludeDateIntervals={excludeDateIntervals}
+              excludeDateIntervals={excludeDateIntervalsForDeparture}
               dateFormat="MM/dd/yyyy"
               placeholderText={loadingAvailability ? "Loading..." : "Select date"}
               disabled={loadingAvailability}
