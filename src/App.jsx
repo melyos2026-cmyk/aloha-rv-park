@@ -292,6 +292,11 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
   const [loadingAvailability, setLoadingAvailability] = useState(true);
   const [allowLotBooking, setAllowLotBooking] = useState(true);
   const [listing, setListing] = useState(null);
+  // Only 'available' and 'reserved' (soon-vacating, known move-out date) lots
+  // can be booked here. A solid 'occupied' lot has no known availability at
+  // all — showing a booking form there would let someone pick dates with no
+  // real guarantee the lot will ever be free then.
+  const canBookStatus = status === "available" || status === "reserved";
 
   useEffect(() => {
     fetch(SUPABASE_URL + '/rest/v1/real_estate_listings?park_id=eq.' + PARK_ID + '&lot_key=eq.' + encodeURIComponent(lot) + '&available=eq.true&select=*', {
@@ -443,7 +448,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
           </div>
         )}
 
-        {status !== "available" && allowLotBooking && (
+        {status === "reserved" && allowLotBooking && (
           <div style={{ display:"flex", alignItems:"center", gap:8, background:"#fffbeb", border:"1px solid #fde68a", borderRadius:8, padding:"8px 12px", marginBottom:16, fontFamily:"sans-serif" }}>
             <div style={{ width:10, height:10, borderRadius:3, background: STATUS_SOLID[status] }} />
             <span style={{ fontSize:12, color:"#92400e" }}>
@@ -475,7 +480,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
           </div>
         )}
 
-        {!allowLotBooking && (
+        {!(allowLotBooking && canBookStatus) && (
           <div style={{ background:"#f5f3ff", border:"1px solid #ddd6fe", borderRadius:8, padding:"12px 16px", marginBottom:16, fontFamily:"sans-serif" }}>
             <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.5 }}>
               This lot is not available through our standard booking system. See details above or contact us for more information.
@@ -483,7 +488,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
           </div>
         )}
 
-        {allowLotBooking && (
+        {allowLotBooking && canBookStatus && (
         <>
         <div style={{ marginBottom:16 }}>
           <label style={lbl}>Rates</label>
