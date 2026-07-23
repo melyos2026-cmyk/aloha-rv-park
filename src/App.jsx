@@ -244,15 +244,11 @@ const STATUS_SOLID = {
   for_sale:    "#ac67dd",
 };
 
-// Default mock statuses
+// Fallback statuses, only used for the instant before the real fetch
+// from rv_lots resolves (or if that fetch fails).
 function initStatuses() {
   const s = {};
-  ALL_LOTS.forEach(l => {
-    if (["B1","B2","B3","B4"].includes(l)) s[l] = "occupied";
-    else if (["B5","B6","C1","C2"].includes(l)) s[l] = "reserved";
-    else if (["D1","D2"].includes(l)) s[l] = "maintenance";
-    else s[l] = "available";
-  });
+  ALL_LOTS.forEach(l => { s[l] = "available"; });
   return s;
 }
 
@@ -791,10 +787,9 @@ export default function AlohaMap() {
 
   useEffect(() => {
     async function loadData() {
-      const [emojiRows, shapeRows, statusRows, textRows, colorRows, rotRows, emojiRotRows, textRotRows] = await Promise.all([
+      const [emojiRows, shapeRows, textRows, colorRows, rotRows, emojiRotRows, textRotRows] = await Promise.all([
         loadFromSupabase('emojis'),
         loadFromSupabase('shapes'),
-        loadFromSupabase('statuses'),
         loadFromSupabase('texts'),
         loadFromSupabase('lotColors'),
         loadFromSupabase('rotations'),
@@ -803,12 +798,23 @@ export default function AlohaMap() {
       ]);
       if (emojiRows.length > 0) setEmojis(emojiRows[0].data || []);
       if (shapeRows.length > 0) setLotShapes(shapeRows[0].data || {});
-      if (statusRows.length > 0) setStatuses(statusRows[0].data || {});
       if (textRows.length > 0) setTexts(textRows[0].data || []);
       if (colorRows.length > 0) setLotColors(colorRows[0].data || {});
       if (rotRows.length > 0) setRotations(rotRows[0].data || {});
       if (emojiRotRows.length > 0) setEmojiRotations(emojiRotRows[0].data || {});
       if (textRotRows.length > 0) setTextRotations(textRotRows[0].data || {});
+      // Real, live lot statuses — rv_lots.status is the single source of
+      // truth shared with the lease application / reservation systems, not
+      // the old disconnected map_elements "statuses" blob.
+      try {
+        const statusRes = await fetch('/api/get-lot-statuses?park_id=' + PARK_ID);
+        if (statusRes.ok) {
+          const liveStatuses = await statusRes.json();
+          setStatuses(prev => ({ ...prev, ...liveStatuses }));
+        }
+      } catch (err) {
+        console.error('Error loading live lot statuses:', err);
+      }
       const info = await loadLotInfo(PARK_ID);
       setLotInfo(info);
       const settings = await loadParkSettings();
@@ -1334,7 +1340,23 @@ export default function AlohaMap() {
                 <span style={{ fontSize:12, fontWeight:600, color:"#6b7280" }}>STATUS / COLOR</span>
                 <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
                   {[["available","#16a34a","🟢 Available"],["occupied","#dc2626","🔴 Occupied"],["reserved","#ca8a04","🟡 Reserved"],["maintenance","#4b5563","⚫ Maintenance"],["for_sale","#ac67dd","🏠 For Sale"]].map(([s,c,label])=>(
-                    <button key={s} onClick={()=>{ setStatuses(prev=>({...prev,[activeEditLot]:s})); if (s === "for_sale") ensureRealEstateListing(activeEditLot); }}
+                    <button key={s} onClick={async ()=>{
+                      setStatuses(prev=>({...prev,[activeEditLot]:s}));
+                      if (s === "for_sale") ensureRealEstateListing(activeEditLot);
+                      // Write straight to rv_lots (the single source of truth
+                      // shared with lease applications/reservations) so this
+                      // manual change is immediately reflected everywhere,
+                      // not just on this map.
+                      try {
+                        await fetch('/api/set-lot-status', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ lotName: activeEditLot, status: s, parkId: PARK_ID }),
+                        });
+                      } catch (err) {
+                        console.error('Error saving lot status:', err);
+                      }
+                    }}
                       style={{ background: statuses[activeEditLot]===s ? c : "#f3f4f6", color: statuses[activeEditLot]===s ? "#fff" : "#374151", border:`2px solid ${c}`, padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600 }}>
                       {label}
                     </button>
@@ -1543,7 +1565,6 @@ export default function AlohaMap() {
               // Guardar emojis y shapes en Supabase
               await saveToSupabase('emojis', 'all', emojis);
               await saveToSupabase('shapes', 'all', lotShapes);
-              await saveToSupabase('statuses', 'all', statuses);
               await saveToSupabase('texts', 'all', texts);
               await saveToSupabase('lotColors', 'all', lotColors);
               await saveToSupabase('rotations', 'all', rotations);

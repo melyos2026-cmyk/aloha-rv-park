@@ -32,24 +32,23 @@ const PRODUCT_LABELS = {
   motorhome: 'Motor Home 40LB Tank',
 };
 
-async function updateLotStatus(lotId, newStatus) {
-  const { data: statusRow } = await supabase
-    .from('map_elements')
-    .select('data')
-    .eq('park_id', 'aloha')
-    .eq('element_type', 'statuses')
-    .eq('element_key', 'all')
+async function updateLotStatus(lotId, newStatus, parkId = 'aloha') {
+  const { data: company, error: companyErr } = await supabase
+    .from('companies')
+    .select('id')
+    .eq('park_id', parkId)
     .single();
 
-  const currentStatuses = statusRow?.data || {};
-  currentStatuses[lotId] = newStatus;
+  if (companyErr || !company) {
+    console.error('Error resolving company for park_id', parkId, companyErr);
+    return;
+  }
 
   const { error: statusError } = await supabase
-    .from('map_elements')
-    .upsert(
-      { park_id: 'aloha', element_type: 'statuses', element_key: 'all', data: currentStatuses },
-      { onConflict: 'park_id,element_type,element_key' }
-    );
+    .from('rv_lots')
+    .update({ status: newStatus })
+    .eq('company_id', company.id)
+    .eq('lot_name', lotId);
 
   if (statusError) {
     console.error('Error updating lot status:', statusError);
