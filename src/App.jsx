@@ -482,11 +482,17 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
 
         {!(allowLotBooking && canBookStatus) && (
           <div style={{ background:"#f5f3ff", border:"1px solid #ddd6fe", borderRadius:8, padding:"12px 16px", marginBottom:16, fontFamily:"sans-serif" }}>
-            <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.5 }}>
-              {status === "occupied"
-                ? "This lot is currently under a month-to-month lease and is not available for rent at this time. Please check back later, or take a look at our other available (green) or soon-to-be-available (orange) lots on the map."
-                : "This lot is not available through our standard booking system. See details above or contact us for more information."}
-            </p>
+            {status === "occupied" ? (
+              <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.6 }}>
+                This lot is currently under a month-to-month lease and is not available for rent at this time. Please check back later, or take a look at our other available{" "}
+                <span style={{ display:"inline-block", width:10, height:10, borderRadius:3, background: STATUS_SOLID.available, verticalAlign:"middle", margin:"0 2px" }} /> or soon-to-be-available{" "}
+                <span style={{ display:"inline-block", width:10, height:10, borderRadius:3, background: STATUS_SOLID.reserved, verticalAlign:"middle", margin:"0 2px" }} /> lots on the map.
+              </p>
+            ) : (
+              <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.5 }}>
+                This lot is not available through our standard booking system. See details above or contact us for more information.
+              </p>
+            )}
           </div>
         )}
 
