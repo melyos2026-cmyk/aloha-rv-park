@@ -284,7 +284,7 @@ function calcStayPreview(arrivalStr, departureStr, hasWeekly) {
   return { isYearly: false, months, weeks, extraDays, totalNights: totalNights + 1 };
 }
 
-function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
+function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, onClose }) {
   const [form, setForm] = useState({ arrival: "", departure: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -562,20 +562,27 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
         {(() => {
           // For 'reserved' lots, surface the nearest actually-open date up
           // front so the guest isn't left guessing among all the grayed-out
-          // days — walks past any back-to-back/overlapping blocked ranges
-          // starting today.
+          // days. If the admin manually set an "available from" date (Lot
+          // Status Control), that's the authoritative answer — use it
+          // directly instead of computing one, since a manual reservation
+          // doesn't necessarily show up in bookedRanges at all.
           if (status !== "reserved" || loadingAvailability) return null;
-          let candidate = new Date();
-          candidate.setHours(0, 0, 0, 0);
-          let changed = true;
-          while (changed) {
-            changed = false;
-            for (const r of bookedRanges) {
-              const start = new Date(r.arrival_date + "T00:00:00");
-              const end = new Date(r.departure_date + "T00:00:00");
-              if (candidate >= start && candidate < end) {
-                candidate = new Date(end);
-                changed = true;
+          let candidate;
+          if (reservedUntil) {
+            candidate = new Date(reservedUntil + "T00:00:00");
+          } else {
+            candidate = new Date();
+            candidate.setHours(0, 0, 0, 0);
+            let changed = true;
+            while (changed) {
+              changed = false;
+              for (const r of bookedRanges) {
+                const start = new Date(r.arrival_date + "T00:00:00");
+                const end = new Date(r.departure_date + "T00:00:00");
+                if (candidate >= start && candidate < end) {
+                  candidate = new Date(end);
+                  changed = true;
+                }
               }
             }
           }
@@ -793,6 +800,7 @@ const emojiHoverStyle = `
 
 export default function AlohaMap() {
   const [statuses, setStatuses] = useState(initStatuses);
+  const [reservedDates, setReservedDates] = useState({});
   const [hover, setHover] = useState(null);
   const [selected, setSelected] = useState(null);
   const [selectedStorageLot, setSelectedStorageLot] = useState(null);
@@ -865,6 +873,14 @@ export default function AlohaMap() {
         }
       } catch (err) {
         console.error('Error loading live lot statuses:', err);
+      }
+      try {
+        const reservedRes = await fetch('/api/get-lot-reserved-dates?park_id=' + PARK_ID);
+        if (reservedRes.ok) {
+          setReservedDates(await reservedRes.json());
+        }
+      } catch (err) {
+        console.error('Error loading lot reserved-until dates:', err);
       }
       const info = await loadLotInfo(PARK_ID);
       // Real, live pricing — rv_lots.daily_rate/weekly_rate/high_season_price/
@@ -1675,6 +1691,7 @@ export default function AlohaMap() {
           status={selected.status}
           lotInfo={lotInfo[selected.lot]}
           parkSettings={parkSettings}
+          reservedUntil={reservedDates[selected.lot]}
           onClose={() => setSelected(null)}
         />
       )}
