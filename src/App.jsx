@@ -821,6 +821,23 @@ export default function AlohaMap() {
         console.error('Error loading live lot statuses:', err);
       }
       const info = await loadLotInfo(PARK_ID);
+      // Real, live pricing — rv_lots.daily_rate/weekly_rate/high_season_price/
+      // low_season_price is the single source of truth shared with the
+      // admin's "Lots & Seasonal Pricing" screen, not the old disconnected
+      // lot_info price_daily/price_monthly/price_weekly fields. Only
+      // price_yearly (rarely used, no rv_lots equivalent) still comes from
+      // lot_info's own manual entry.
+      try {
+        const pricingRes = await fetch('/api/get-lot-pricing?park_id=' + PARK_ID);
+        if (pricingRes.ok) {
+          const livePricing = await pricingRes.json();
+          Object.keys(livePricing).forEach((lotName) => {
+            info[lotName] = { ...(info[lotName] || {}), ...livePricing[lotName] };
+          });
+        }
+      } catch (err) {
+        console.error('Error loading live lot pricing:', err);
+      }
       setLotInfo(info);
       const settings = await loadParkSettings();
       if (settings) setParkSettings(settings);
