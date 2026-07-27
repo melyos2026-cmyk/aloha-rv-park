@@ -825,12 +825,26 @@ export default function AlohaMap() {
   const [lotShapes, setLotShapes] = useState({});
   const [dragging, setDragging] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const isAdmin = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "true";
+  const [isAdmin, setIsAdmin] = useState(false);
   const isInfoOnly = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "info";
   const [editMode, setEditMode] = useState(false);
   const [activeEmoji, setActiveEmoji] = useState(null);
   const [propaneModalLotId, setPropaneModalLotId] = useState(null);
   const [storageModalOpen, setStorageModalOpen] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const editRequested = params.get("edit") === "true";
+    const token = params.get("token");
+    if (!editRequested || !token) {
+      setIsAdmin(false);
+      return;
+    }
+    fetch(`/api/verify-edit-token?park_id=${PARK_ID}&token=${encodeURIComponent(token)}`)
+      .then((res) => res.json())
+      .then((result) => setIsAdmin(!!result.valid))
+      .catch(() => setIsAdmin(false));
+  }, []);
 
   useEffect(() => {
     const update = () => {
