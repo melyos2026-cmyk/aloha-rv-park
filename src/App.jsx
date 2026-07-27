@@ -1604,9 +1604,24 @@ export default function AlohaMap() {
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Monthly Price ($)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.price_monthly || 650}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_monthly:parseFloat(e.target.value)}}))}
+                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Base Price ($)</label>
+                        <input type="number" defaultValue={lotInfo[activeEditLot]?.base_price || ""}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], base_price:parseFloat(e.target.value)}}))}
+                          placeholder="year-round flat rate"
+                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>High Season ($/mo)</label>
+                        <input type="number" defaultValue={lotInfo[activeEditLot]?.high_season_price || ""}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], high_season_price:parseFloat(e.target.value)}}))}
+                          placeholder="optional"
+                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Low Season ($/mo)</label>
+                        <input type="number" defaultValue={lotInfo[activeEditLot]?.low_season_price || ""}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], low_season_price:parseFloat(e.target.value)}}))}
+                          placeholder="optional"
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>
@@ -1636,11 +1651,25 @@ export default function AlohaMap() {
                       await saveLotInfo(PARK_ID, activeEditLot, {
                         max_length: info.max_length || 45,
                         amperage: info.amperage || 50,
-                        price_daily: info.price_daily || 45,
-                        price_monthly: info.price_monthly || 650,
-                        price_weekly: info.price_weekly || null,
                         price_yearly: info.price_yearly || null,
                         description: info.description || ""
+                      });
+                      // Real pricing (base/high/low season, daily/weekly rate)
+                      // lives in rv_lots, the same table admin.aloharvparkfl.com's
+                      // "Lots & Seasonal Pricing" screen manages — save it there
+                      // directly instead of the old disconnected lot_info fields.
+                      await fetch('/api/set-lot-pricing', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          parkId: PARK_ID,
+                          lotName: activeEditLot,
+                          basePrice: info.base_price,
+                          highSeasonPrice: info.high_season_price,
+                          lowSeasonPrice: info.low_season_price,
+                          dailyRate: info.price_daily,
+                          weeklyRate: info.price_weekly,
+                        }),
                       });
                       alert("Lot info saved!");
                     }} style={{ marginTop:8, background:"#16a34a", color:"#fff", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600, width:"100%" }}>

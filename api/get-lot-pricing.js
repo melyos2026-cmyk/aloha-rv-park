@@ -72,6 +72,9 @@ export default async function handler(req, res) {
         price_daily: l.daily_rate || null,
         price_weekly: l.weekly_rate || null,
         price_monthly: monthly,
+        base_price: l.base_price || null,
+        high_season_price: l.high_season_price || null,
+        low_season_price: l.low_season_price || null,
       };
     });
 
