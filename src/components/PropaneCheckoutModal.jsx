@@ -1,29 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-const PRODUCTS = [
-  { id: '20lb', label: '20 LB Tank', price: 18, type: 'fixed' },
-  { id: '30lb', label: '30 LB Tank', price: 30, type: 'fixed' },
-  { id: '40lb', label: '40 LB Tank', price: 36, type: 'fixed' },
-  { id: 'forklift', label: 'Forklift', price: 36, type: 'fixed' },
-  { id: 'motorhome', label: 'Motor Home 40LB Tank', pricePerGallon: 4.25, type: 'variable' },
-];
+const PARK_ID = (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('park_id')) || 'aloha';
 
 export default function PropaneCheckoutModal({ lotId, onClose }) {
-  const [productId, setProductId] = useState('20lb');
+  const [products, setProducts] = useState([]);
+  const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [gallons, setGallons] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingPrices, setLoadingPrices] = useState(true);
   const [error, setError] = useState('');
 
-  const selected = PRODUCTS.find((p) => p.id === productId);
-  const isVariable = selected.type === 'variable';
+  useEffect(() => {
+    fetch(`/api/get-propane-pricing?park_id=${PARK_ID}`)
+      .then((res) => res.json())
+      .then((result) => {
+        const list = result.products || [];
+        setProducts(list);
+        if (list.length > 0) setProductId(list[0].product_id);
+        setLoadingPrices(false);
+      })
+      .catch(() => setLoadingPrices(false));
+  }, []);
 
-  const total = isVariable
-    ? (parseFloat(gallons) || 0) * selected.pricePerGallon
-    : selected.price * quantity;
+  const selected = products.find((p) => p.product_id === productId);
+  const isVariable = selected?.unit === 'gallon';
+
+  const total = selected
+    ? isVariable
+      ? (parseFloat(gallons) || 0) * Number(selected.price)
+      : Number(selected.price) * quantity
+    : 0;
 
   async function handleCheckout() {
     setError('');
+
+    if (!selected) {
+      setError('No propane products configured for this park.');
+      return;
+    }
 
     const qty = isVariable ? parseFloat(gallons) : quantity;
     if (!qty || qty <= 0) {
@@ -44,6 +59,7 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
           productId,
           quantity: qty,
           lotId,
+          parkId: PARK_ID,
         }),
       });
 
@@ -69,6 +85,10 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
         </div>
 
         <div style={styles.body}>
+          {loadingPrices ? (
+            <p style={{ fontSize: 13, color: '#666' }}>Loading prices...</p>
+          ) : (
+          <>
           <label style={styles.label}>Producto</label>
           <select
             style={styles.select}
@@ -80,12 +100,14 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
               setError('');
             }}
           >
-            {PRODUCTS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label} — {p.type === 'fixed' ? `$${p.price}` : `$${p.pricePerGallon}/gal`}
+            {products.map((p) => (
+              <option key={p.product_id} value={p.product_id}>
+                {p.label} — {p.unit === 'gallon' ? `$${p.price}/gal` : `$${p.price}`}
               </option>
             ))}
           </select>
+          </>
+          )}
 
           {isVariable ? (
             <>

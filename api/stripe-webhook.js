@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -204,6 +205,7 @@ export default async function handler(req, res) {
       const { productId, quantity, lotId, park } = session.metadata || {};
 
       try {
+        const qrToken = crypto.randomBytes(16).toString('hex');
         const { error } = await supabase.from('propane_orders').upsert(
           {
             park_id: park || 'aloha',
@@ -219,6 +221,8 @@ export default async function handler(req, res) {
             stripe_payment_intent: session.payment_intent || null,
             status: 'paid',
             paid_at: new Date().toISOString(),
+            qr_token: qrToken,
+            redeemed: false,
           },
           { onConflict: 'stripe_session_id' }
         );

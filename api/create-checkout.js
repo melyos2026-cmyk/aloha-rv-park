@@ -1,14 +1,13 @@
 import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-const PRODUCTS = {
-  '20lb': { name: '20 LB Propane Tank', unitAmount: 1800, unit: 'tank', maxQty: 20 },
-  '30lb': { name: '30 LB Propane Tank', unitAmount: 3000, unit: 'tank', maxQty: 20 },
-  '40lb': { name: '40 LB Propane Tank', unitAmount: 3600, unit: 'tank', maxQty: 20 },
-  forklift: { name: 'Forklift Propane Tank', unitAmount: 3600, unit: 'tank', maxQty: 20 },
-  motorhome: { name: 'Motor Home 40LB Tank Fill', unitAmount: 425, unit: 'gallon', maxQty: 200 },
-};
+const MAX_QTY = { '20lb': 20, '30lb': 20, '40lb': 20, forklift: 20, motorhome: 200 };
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -17,30 +16,46 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { productId, quantity, lotId, customerEmail } = req.body || {};
+    const { productId, quantity, lotId, customerEmail, parkId } = req.body || {};
 
-    const product = PRODUCTS[productId];
+    const { data: company } = await supabase
+      .from('companies')
+      .select('id')
+      .eq('park_id', parkId || 'aloha')
+      .single();
+
+    if (!company) {
+      return res.status(404).json({ error: 'Park not found' });
+    }
+
+    const { data: product } = await supabase
+      .from('propane_pricing')
+      .select('label, price, unit')
+      .eq('company_id', company.id)
+      .eq('product_id', productId)
+      .single();
+
     if (!product) {
       return res.status(400).json({ error: 'Producto inválido' });
     }
 
     const isGallon = product.unit === 'gallon';
     const rawQty = isGallon ? parseFloat(quantity) : parseInt(quantity, 10);
+    const maxQty = MAX_QTY[productId] || 20;
 
     if (!Number.isFinite(rawQty) || rawQty <= 0) {
       return res.status(400).json({ error: 'Cantidad inválida' });
     }
-    if (rawQty > product.maxQty) {
-      return res.status(400).json({ error: `Cantidad máxima: ${product.maxQty}` });
+    if (rawQty > maxQty) {
+      return res.status(400).json({ error: `Cantidad máxima: ${maxQty}` });
     }
 
     const origin = req.headers.origin || `https://${req.headers.host}`;
+    const unitAmount = Math.round(Number(product.price) * 100);
 
     // Stripe no acepta cantidades con decimales, así que para productos por galón
     // calculamos el precio total exacto y usamos quantity: 1
-    const lineItemAmount = isGallon
-      ? Math.round(product.unitAmount * rawQty)
-      : product.unitAmount;
+    const lineItemAmount = isGallon ? Math.round(unitAmount * rawQty) : unitAmount;
     const lineItemQty = isGallon ? 1 : rawQty;
 
     const session = await stripe.checkout.sessions.create({
@@ -52,8 +67,8 @@ export default async function handler(req, res) {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: product.name,
-              description: isGallon ? `${rawQty} gallons × $4.25` : `Quantity: ${rawQty}`,
+              name: product.label,
+              description: isGallon ? `${rawQty} gallons × $${product.price}` : `Quantity: ${rawQty}`,
             },
             unit_amount: lineItemAmount,
           },
@@ -64,7 +79,7 @@ export default async function handler(req, res) {
         productId,
         quantity: String(rawQty),
         lotId: lotId || '',
-        park: 'aloha-rv-park',
+        park: parkId || 'aloha',
       },
       success_url: `${origin}/?propane_payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/?propane_payment=cancelled`,

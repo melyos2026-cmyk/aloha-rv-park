@@ -837,6 +837,7 @@ export default function AlohaMap() {
   const [editMode, setEditMode] = useState(false);
   const [activeEmoji, setActiveEmoji] = useState(null);
   const [propaneModalLotId, setPropaneModalLotId] = useState(null);
+  const [propaneReceipt, setPropaneReceipt] = useState(null);
   const [storageModalOpen, setStorageModalOpen] = useState(false);
 
   useEffect(() => {
@@ -852,6 +853,33 @@ export default function AlohaMap() {
       .then((result) => setEditorRole(result.valid ? result.role : null))
       .catch(() => setEditorRole(null));
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("propane_payment") !== "success") return;
+    const sessionId = params.get("session_id");
+    if (!sessionId) return;
+
+    let attempts = 0;
+    function fetchOrder() {
+      fetch(`/api/get-propane-order?session_id=${encodeURIComponent(sessionId)}`)
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.order) {
+            setPropaneReceipt(result.order);
+          } else if (attempts < 5) {
+            // the Stripe webhook can take a couple seconds to land
+            attempts += 1;
+            setTimeout(fetchOrder, 1500);
+          }
+        })
+        .catch(() => {});
+    }
+    fetchOrder();
+    // Clean the URL so refreshing doesn't re-trigger this
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
 
   useEffect(() => {
     const update = () => {
@@ -1288,6 +1316,27 @@ export default function AlohaMap() {
 
       {propaneModalLotId && (
         <PropaneCheckoutModal lotId={propaneModalLotId} onClose={()=>setPropaneModalLotId(null)} />
+      )}
+      {propaneReceipt && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:4000 }}>
+          <div style={{ background:"#fff", borderRadius:16, padding:28, width:320, maxWidth:"90vw", textAlign:"center", fontFamily:"sans-serif" }}>
+            <h3 style={{ margin:"0 0 4px 0", fontSize:18 }}>✅ Payment Confirmed</h3>
+            <p style={{ color:"#555", fontSize:13.5, margin:"0 0 16px 0" }}>
+              {propaneReceipt.quantity} {propaneReceipt.unit === "gallon" ? "gallons" : "×"} {propaneReceipt.product_label} — ${Number(propaneReceipt.amount_total).toFixed(2)}
+            </p>
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(propaneReceipt.qr_token)}`}
+              alt="Propane pickup QR code"
+              style={{ width:220, height:220, margin:"0 auto 16px auto", display:"block" }}
+            />
+            <p style={{ fontSize:12.5, color:"#777", marginBottom:20 }}>
+              Show this code to staff when you pick up your propane. It can only be used once.
+            </p>
+            <button onClick={() => setPropaneReceipt(null)} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"10px 24px", borderRadius:8, fontWeight:700, fontSize:14, cursor:"pointer" }}>
+              Done
+            </button>
+          </div>
+        </div>
       )}
       {selectedStorageLot && (
         <StorageCheckoutModal
