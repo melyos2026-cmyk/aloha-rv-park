@@ -810,6 +810,7 @@ export default function AlohaMap() {
   const [scale, setScale] = useState({ w: 900, h: 1130 });
   const [draftLots, setDraftLots] = useState(LOTS);
   const [activeEditLot, setActiveEditLot] = useState(null);
+  const [colorEditLot, setColorEditLot] = useState(null);
   const [snapLines, setSnapLines] = useState({ x: null, y: null });
   const [newLotName, setNewLotName] = useState("");
   const [texts, setTexts] = useState([]);
@@ -825,7 +826,13 @@ export default function AlohaMap() {
   const [lotShapes, setLotShapes] = useState({});
   const [dragging, setDragging] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [editorRole, setEditorRole] = useState(null); // null | 'master_admin' | 'park_admin'
+  // master_admin: full editor (move/resize lots, everything below).
+  // park_admin: restricted — can only manage emoji (add/edit info/delete)
+  // and change a lot's color, never move/resize lots or edit their info/price.
+  const isAdmin = editorRole === "master_admin";
+  const canEditMap = editorRole === "master_admin" || editorRole === "park_admin";
+  const isRestrictedEditor = editorRole === "park_admin";
   const isInfoOnly = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "info";
   const [editMode, setEditMode] = useState(false);
   const [activeEmoji, setActiveEmoji] = useState(null);
@@ -837,13 +844,13 @@ export default function AlohaMap() {
     const editRequested = params.get("edit") === "true";
     const token = params.get("token");
     if (!editRequested || !token) {
-      setIsAdmin(false);
+      setEditorRole(null);
       return;
     }
     fetch(`/api/verify-edit-token?park_id=${PARK_ID}&token=${encodeURIComponent(token)}`)
       .then((res) => res.json())
-      .then((result) => setIsAdmin(!!result.valid))
-      .catch(() => setIsAdmin(false));
+      .then((result) => setEditorRole(result.valid ? result.role : null))
+      .catch(() => setEditorRole(null));
   }, []);
 
   useEffect(() => {
@@ -1054,7 +1061,7 @@ export default function AlohaMap() {
             const py = y / 100 * mapH;
             const pw = w / 100 * mapW;
             const ph = h / 100 * mapH;
-            if (editMode) {
+            if (editMode && isAdmin) {
               return (
                 <Rnd
                   key={lot}
@@ -1095,6 +1102,31 @@ export default function AlohaMap() {
                 >
                   <span style={{ fontSize:"clamp(5px,0.85vw,10px)", fontWeight:700, color:"#fff", textShadow:"0 1px 3px rgba(0,0,0,0.8)", pointerEvents:"none" }}>{lot}</span>
                 </Rnd>
+              );
+            }
+            if (editMode && isRestrictedEditor) {
+              // park_admin: can change this lot's color, but never move/resize it.
+              return (
+                <div
+                  key={lot}
+                  onClick={() => setColorEditLot(lot)}
+                  style={{
+                    position:"absolute",
+                    left:`${x}%`, top:`${y}%`,
+                    width:`${w}%`, height:`${h}%`,
+                    background: lotColors[lot] ? lotColors[lot] : STATUS_COLORS[status],
+                    borderRadius: borderRadius,
+                    clipPath: clipPath,
+                    border: colorEditLot === lot ? "2px solid #f59e0b" : "1.5px dashed rgba(255,255,255,0.8)",
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    cursor:"pointer",
+                    boxSizing:"border-box",
+                    zIndex: colorEditLot === lot ? 50 : 10,
+                    transform: `rotate(${rotations[lot] || 0}deg)`,
+                  }}
+                >
+                  <span style={{ fontSize:"clamp(5px,0.85vw,10px)", fontWeight:700, color:"#fff", textShadow:"0 1px 3px rgba(0,0,0,0.8)", pointerEvents:"none" }}>{lot}</span>
+                </div>
               );
             }
             return (
@@ -1279,7 +1311,7 @@ export default function AlohaMap() {
             ⚙️ Park Settings
           </button>
         )}
-        {isAdmin && (
+        {canEditMap && (
           <button
             onClick={() => { setEditMode(m => !m); setActiveEmoji(null); }}
             style={{ background: editMode ? "#f59e0b" : "#16a34a", color:"#fff", border:"none", padding:"8px 20px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700, boxShadow:"0 2px 6px rgba(0,0,0,0.15)" }}
@@ -1364,7 +1396,8 @@ export default function AlohaMap() {
       {editMode && (
         <div style={{ maxWidth:900, margin:"0 auto 20px", background:"#fff", border:"2px solid #f59e0b", borderRadius:14, padding:16, fontFamily:"sans-serif" }}>
           
-          {/* Add Lot */}
+          {/* Add Lot — master only */}
+          {isAdmin && (
           <div style={{ marginBottom:14, padding:12, background:"#f0fdf4", borderRadius:10 }}>
             <strong style={{ fontSize:13, color:"#166534" }}>+ Add New Lot</strong>
 
@@ -1379,6 +1412,7 @@ export default function AlohaMap() {
               }} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontWeight:600 }}>Add</button>
             </div>
           </div>
+          )}
 
           {/* Add Emojis */}
           <div style={{ marginBottom:14, padding:12, background:"#fef9c3", borderRadius:10 }}>
@@ -1402,7 +1436,8 @@ export default function AlohaMap() {
             </div>
           </div>
 
-          {/* Add Text */}
+          {/* Add Text — master only */}
+          {isAdmin && (
           <div style={{ marginBottom:14, padding:12, background:"#eff6ff", borderRadius:10 }}>
             <strong style={{ fontSize:13, color:"#1e40af" }}>Add Text to Map</strong>
             <div style={{ display:"flex", gap:8, marginTop:8 }}>
@@ -1419,8 +1454,39 @@ export default function AlohaMap() {
               }} style={{ background:"#1e40af", color:"#fff", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontWeight:600 }}>Add</button>
             </div>
           </div>
+          )}
 
-          {activeEditLot && draftLots[activeEditLot] && (
+          {colorEditLot && (
+            <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:3000 }}
+              onClick={() => setColorEditLot(null)}>
+              <div onClick={(e) => e.stopPropagation()} style={{ background:"#fff", borderRadius:12, padding:20, width:260, fontFamily:"sans-serif" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                  <strong style={{ fontSize:15 }}>Lot <span style={{ color:"#16a34a" }}>{colorEditLot}</span> color</strong>
+                  <button onClick={() => setColorEditLot(null)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer", color:"#888" }}>✕</button>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+                  <input type="color" value={lotColors[colorEditLot] || "#16a34a"}
+                    onChange={async (e) => {
+                      const updated = { ...lotColors, [colorEditLot]: e.target.value };
+                      setLotColors(updated);
+                      await saveToSupabase('lotColors', 'all', updated);
+                    }}
+                    style={{ width:48, height:36, border:"none", cursor:"pointer" }} />
+                  <span style={{ fontSize:13, color:"#374151" }}>Pick a color</span>
+                </div>
+                <button onClick={async () => {
+                  const updated = { ...lotColors };
+                  delete updated[colorEditLot];
+                  setLotColors(updated);
+                  await saveToSupabase('lotColors', 'all', updated);
+                }} style={{ width:"100%", background:"#f3f4f6", color:"#374151", border:"1px solid #d1d5db", padding:"8px 12px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                  Reset to default color
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isAdmin && activeEditLot && draftLots[activeEditLot] && (
             <>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
                 <strong style={{ fontSize:15 }}>Editing: <span style={{ color:"#16a34a" }}>{activeEditLot}</span></strong>
@@ -1687,6 +1753,7 @@ export default function AlohaMap() {
             </>
           )}
 
+          {isAdmin && (
           <button onClick={async ()=>{
             try {
               // Guardar emojis y shapes en Supabase
@@ -1724,6 +1791,21 @@ export default function AlohaMap() {
           }} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"10px 20px", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:600, width:"100%" }}>
             💾 Save All Changes
           </button>
+          )}
+
+          {isRestrictedEditor && (
+          <button onClick={async ()=>{
+            try {
+              await saveToSupabase('emojis', 'all', emojis);
+              await saveToSupabase('lotColors', 'all', lotColors);
+              alert("Changes saved!");
+            } catch(e) {
+              alert("⚠️ Error: " + e.message);
+            }
+          }} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"10px 20px", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:600, width:"100%" }}>
+            💾 Save Changes
+          </button>
+          )}
         </div>
       )}
 

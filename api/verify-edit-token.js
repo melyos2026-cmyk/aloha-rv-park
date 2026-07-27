@@ -43,10 +43,10 @@ export default async function handler(req, res) {
     }
 
     const parts = decoded.split('.');
-    if (parts.length !== 3) return res.status(200).json({ valid: false });
-    const [tokenCompanyId, expiresStr, signature] = parts;
+    if (parts.length !== 4) return res.status(200).json({ valid: false });
+    const [tokenCompanyId, role, expiresStr, signature] = parts;
 
-    const payload = `${tokenCompanyId}.${expiresStr}`;
+    const payload = `${tokenCompanyId}.${role}.${expiresStr}`;
     const expectedSignature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
 
     const validSignature =
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     if (Date.now() > Number(expiresStr)) return res.status(200).json({ valid: false });
     if (tokenCompanyId !== company.id) return res.status(200).json({ valid: false });
 
-    return res.status(200).json({ valid: true });
+    return res.status(200).json({ valid: true, role: role === 'master_admin' ? 'master_admin' : 'park_admin' });
   } catch (err) {
     console.error('Error verifying map edit token:', err);
     return res.status(200).json({ valid: false });
