@@ -202,7 +202,7 @@ export default async function handler(req, res) {
       }
     } else {
       // Flujo original de propano
-      const { productId, quantity, lotId, park } = session.metadata || {};
+      const { productId, quantity, lotId, park, residentLot } = session.metadata || {};
 
       try {
         const qrToken = crypto.randomBytes(16).toString('hex');
@@ -224,6 +224,7 @@ export default async function handler(req, res) {
             paid_at: new Date().toISOString(),
             qr_token: qrToken,
             redeemed: false,
+            resident_lot_name: residentLot || null,
           },
           { onConflict: 'stripe_session_id' }
         );
