@@ -7,6 +7,8 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [gallons, setGallons] = useState('');
+  const [email, setEmail] = useState('');
+  const [lotNumber, setLotNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingPrices, setLoadingPrices] = useState(true);
   const [error, setError] = useState('');
@@ -49,6 +51,10 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
       setError('Cantidad de galones demasiado alta');
       return;
     }
+    if (!email && !lotNumber) {
+      setError('Ingresa tu email, o el número de tu lote si sos residente.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -60,6 +66,8 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
           quantity: qty,
           lotId,
           parkId: PARK_ID,
+          customerEmail: email || undefined,
+          residentLot: lotNumber || undefined,
         }),
       });
 
@@ -135,6 +143,23 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
               />
             </>
           )}
+
+          <label style={styles.label}>Email (requerido)</label>
+          <input
+            type="email"
+            style={styles.input}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="tu@email.com"
+          />
+
+          <label style={styles.label}>Lote (solo residentes — opcional en vez del email)</label>
+          <input
+            style={styles.input}
+            value={lotNumber}
+            onChange={(e) => setLotNumber(e.target.value)}
+            placeholder="Ej. A12"
+          />
 
           <div style={styles.totalRow}>
             <span>Total</span>

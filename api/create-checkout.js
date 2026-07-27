@@ -16,7 +16,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { productId, quantity, lotId, customerEmail, parkId } = req.body || {};
+    const { productId, quantity, lotId, customerEmail, parkId, residentLot } = req.body || {};
+
+    if (!customerEmail && !residentLot) {
+      return res.status(400).json({ error: 'Please provide an email address, or your lot number if you are a resident.' });
+    }
 
     const { data: company } = await supabase
       .from('companies')
@@ -79,6 +83,7 @@ export default async function handler(req, res) {
         productId,
         quantity: String(rawQty),
         lotId: lotId || '',
+        residentLot: residentLot || '',
         park: parkId || 'aloha',
       },
       success_url: `${origin}/?propane_payment=success&session_id={CHECKOUT_SESSION_ID}`,
