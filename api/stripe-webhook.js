@@ -231,7 +231,24 @@ export default async function handler(req, res) {
 
         if (error) {
           console.error('Supabase insert error:', error);
-        } else if (customerEmail && process.env.RESEND_API_KEY) {
+        } else {
+          const { data: company } = await supabase
+            .from('companies')
+            .select('id')
+            .eq('park_id', park || 'aloha')
+            .single();
+
+          if (company) {
+            await supabase.from('resident_update_notifications').insert({
+              company_id: company.id,
+              resident_name: customerEmail || null,
+              update_type: 'propane_payment',
+              message: `Propane payment received: ${quantity} ${productId === 'motorhome' ? 'gal' : '×'} ${PRODUCT_LABELS[productId] || productId} — $${((session.amount_total || 0) / 100).toFixed(2)}.`,
+            });
+          }
+        }
+
+        if (!error && customerEmail && process.env.RESEND_API_KEY) {
           try {
             const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(qrToken)}`;
             const label = PRODUCT_LABELS[productId] || productId;
