@@ -4,6 +4,7 @@ const PARK_ID = (typeof window !== 'undefined' && new URLSearchParams(window.loc
 
 export default function PropaneCheckoutModal({ lotId, onClose }) {
   const [products, setProducts] = useState([]);
+  const [motorhomePrice, setMotorhomePrice] = useState(null);
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [gallons, setGallons] = useState('');
@@ -18,7 +19,10 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
     fetch(`/api/get-propane-pricing?park_id=${PARK_ID}`)
       .then((res) => res.json())
       .then((result) => {
-        const list = (result.products || []).filter((p) => p.unit !== 'gallon');
+        const rawList = result.products || [];
+        const gallonProduct = rawList.find((p) => p.unit === 'gallon');
+        setMotorhomePrice(gallonProduct ? gallonProduct.price : null);
+        const list = rawList.filter((p) => p.unit !== 'gallon');
         setProducts(list);
         if (list.length > 0) setProductId(list[0].product_id);
         setTax(result.tax || { enabled: false, ratePercent: 0 });
@@ -104,8 +108,8 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
           ) : (
           <>
           <p style={{ fontSize: 12.5, color: '#888', marginBottom: 10 }}>
-            Need a motor home fill-up (by the gallon)? That's paid in person when we service you —
-            call us at the number above or just come by.
+            Need a motor home fill-up (by the gallon)? {motorhomePrice ? `$${Number(motorhomePrice).toFixed(2)}/gal, ` : ''}
+            paid in person when we service you — call us at the number above or just come by.
           </p>
           <label style={styles.label}>Producto</label>
           <select
