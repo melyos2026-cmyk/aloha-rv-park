@@ -18,7 +18,7 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
     fetch(`/api/get-propane-pricing?park_id=${PARK_ID}`)
       .then((res) => res.json())
       .then((result) => {
-        const list = result.products || [];
+        const list = (result.products || []).filter((p) => p.unit !== 'gallon');
         setProducts(list);
         if (list.length > 0) setProductId(list[0].product_id);
         setTax(result.tax || { enabled: false, ratePercent: 0 });
@@ -103,6 +103,10 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
             <p style={{ fontSize: 13, color: '#666' }}>Loading prices...</p>
           ) : (
           <>
+          <p style={{ fontSize: 12.5, color: '#888', marginBottom: 10 }}>
+            Need a motor home fill-up (by the gallon)? That's paid in person when we service you —
+            call us at the number above or just come by.
+          </p>
           <label style={styles.label}>Producto</label>
           <select
             style={styles.select}
