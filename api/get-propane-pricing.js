@@ -27,12 +27,24 @@ export default async function handler(req, res) {
 
     const { data, error } = await supabase
       .from('propane_pricing')
-      .select('product_id, label, price, unit')
+      .select('product_id, label, price, unit, taxable')
       .eq('company_id', company.id);
 
     if (error) throw error;
 
-    return res.status(200).json({ products: data || [] });
+    const { data: taxSettings } = await supabase
+      .from('company_tax_settings')
+      .select('enable_tax, manual_tax_rate_percent')
+      .eq('company_id', company.id)
+      .maybeSingle();
+
+    return res.status(200).json({
+      products: data || [],
+      tax: {
+        enabled: !!taxSettings?.enable_tax,
+        ratePercent: Number(taxSettings?.manual_tax_rate_percent || 0),
+      },
+    });
   } catch (err) {
     console.error('Error fetching propane pricing:', err);
     return res.status(500).json({ error: 'Could not fetch propane pricing' });

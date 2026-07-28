@@ -12,6 +12,7 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
   const [loading, setLoading] = useState(false);
   const [loadingPrices, setLoadingPrices] = useState(true);
   const [error, setError] = useState('');
+  const [tax, setTax] = useState({ enabled: false, ratePercent: 0 });
 
   useEffect(() => {
     fetch(`/api/get-propane-pricing?park_id=${PARK_ID}`)
@@ -20,6 +21,7 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
         const list = result.products || [];
         setProducts(list);
         if (list.length > 0) setProductId(list[0].product_id);
+        setTax(result.tax || { enabled: false, ratePercent: 0 });
         setLoadingPrices(false);
       })
       .catch(() => setLoadingPrices(false));
@@ -33,8 +35,10 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
       ? (parseFloat(gallons) || 0) * Number(selected.price)
       : Number(selected.price) * quantity
     : 0;
+  const taxApplies = tax.enabled && selected?.taxable;
+  const salesTax = taxApplies ? subtotal * (tax.ratePercent / 100) : 0;
   const processingFee = subtotal * 0.04;
-  const total = subtotal + processingFee;
+  const total = subtotal + salesTax + processingFee;
 
   async function handleCheckout() {
     setError('');
@@ -167,6 +171,12 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
             <span>Subtotal</span>
             <span>${subtotal.toFixed(2)}</span>
           </div>
+          {taxApplies && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 4 }}>
+              <span>Sales Tax ({tax.ratePercent}%)</span>
+              <span>${salesTax.toFixed(2)}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 8 }}>
             <span>Card Processing Fee (4%)</span>
             <span>${processingFee.toFixed(2)}</span>
