@@ -28,11 +28,13 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
   const selected = products.find((p) => p.product_id === productId);
   const isVariable = selected?.unit === 'gallon';
 
-  const total = selected
+  const subtotal = selected
     ? isVariable
       ? (parseFloat(gallons) || 0) * Number(selected.price)
       : Number(selected.price) * quantity
     : 0;
+  const processingFee = subtotal * 0.04;
+  const total = subtotal + processingFee;
 
   async function handleCheckout() {
     setError('');
@@ -161,6 +163,14 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
             placeholder="Ej. A12"
           />
 
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 4 }}>
+            <span>Subtotal</span>
+            <span>${subtotal.toFixed(2)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 8 }}>
+            <span>Card Processing Fee (4%)</span>
+            <span>${processingFee.toFixed(2)}</span>
+          </div>
           <div style={styles.totalRow}>
             <span>Total</span>
             <span style={styles.totalAmount}>${total.toFixed(2)}</span>

@@ -62,6 +62,12 @@ export default async function handler(req, res) {
     const lineItemAmount = isGallon ? Math.round(unitAmount * rawQty) : unitAmount;
     const lineItemQty = isGallon ? 1 : rawQty;
 
+    // 4% card processing fee — a separate charge, not a tax, added on top
+    // of the propane subtotal (Mely: no hay tax en el propano, pero sí un
+    // cargo por procesar la tarjeta).
+    const subtotalCents = lineItemAmount * lineItemQty;
+    const processingFeeCents = Math.round(subtotalCents * 0.04);
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -77,6 +83,14 @@ export default async function handler(req, res) {
             unit_amount: lineItemAmount,
           },
           quantity: lineItemQty,
+        },
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: { name: 'Card Processing Fee (4%)' },
+            unit_amount: processingFeeCents,
+          },
+          quantity: 1,
         },
       ],
       metadata: {

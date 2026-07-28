@@ -1330,7 +1330,10 @@ export default function AlohaMap() {
               style={{ width:220, height:220, margin:"0 auto 16px auto", display:"block" }}
             />
             <p style={{ fontSize:12.5, color:"#777", marginBottom:20 }}>
-              Show this code to staff when you pick up your propane. It can only be used once.
+              {propaneReceipt.unit === "gallon"
+                ? "Show this code to staff for your fill-up. It can only be used once."
+                : `Show this code to staff each time you pick up a tank — this code works once per tank purchased${propaneReceipt.quantity > 1 ? ` (${propaneReceipt.quantity} total, multiple visits OK)` : ""}.`}{" "}
+              No refunds — unpicked-up tanks are not refundable.
             </p>
             <button onClick={() => setPropaneReceipt(null)} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"10px 24px", borderRadius:8, fontWeight:700, fontSize:14, cursor:"pointer" }}>
               Done
