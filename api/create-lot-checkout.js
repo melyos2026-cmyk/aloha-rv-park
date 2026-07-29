@@ -117,6 +117,25 @@ export default async function handler(req, res) {
 
     const hasWeekly = !!lotInfo.price_weekly;
     const stay = calcStay(arrivalDate, departureDate, hasWeekly);
+
+    // Stays past the park's background-check threshold (Lease Defaults,
+    // admin-editable, default 15 days) — and any yearly stay — mean the
+    // guest is becoming a resident and must go through the lease
+    // application (with background check), not a direct online payment.
+    const { data: parkSettingsRow } = await supabase
+      .from('park_settings')
+      .select('lease_defaults')
+      .eq('id', 1)
+      .maybeSingle();
+    const thresholdDays =
+      Number(parkSettingsRow?.lease_defaults?.background_check_threshold_days) || 15;
+
+    if (stay.isYearly || stay.totalNights > thresholdDays) {
+      return res.status(403).json({
+        error: `Stays of ${thresholdDays}+ days require a lease application instead of online payment.`,
+      });
+    }
+
     const origin = req.headers.origin || `https://${req.headers.host}`;
     const lineItems = [];
 

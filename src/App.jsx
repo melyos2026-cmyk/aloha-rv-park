@@ -357,6 +357,16 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, onClo
   const hasOverlap = hasValidDates && rangeOverlaps(form.arrival, form.departure);
   const stay = hasValidDates && !hasOverlap ? calcStayPreview(form.arrival, form.departure, hasWeekly) : null;
 
+  // Stays longer than the park's background-check threshold (admin-editable
+  // under Lease Defaults, default 15 days) — and any yearly stay — mean the
+  // guest is becoming a resident, not making a short-term reservation. Those
+  // always require the lease application (with background check), so they
+  // can't just Pay Now here.
+  const backgroundCheckThresholdDays =
+    Number(parkSettings?.lease_defaults?.background_check_threshold_days) || 15;
+  const requiresApplication =
+    !!stay && (stay.isYearly || stay.totalNights > backgroundCheckThresholdDays);
+
   let total = 0;
   let breakdownLines = [];
   if (stay) {
@@ -376,6 +386,10 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, onClo
 
   async function handlePayNow() {
     setError("");
+    if (requiresApplication) {
+      setError(`Stays of ${backgroundCheckThresholdDays}+ days require a lease application instead.`);
+      return;
+    }
     if (!hasValidDates) {
       setError("Please select a valid arrival and departure date");
       return;
@@ -667,9 +681,28 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, onClo
           Free cancellation up to {parkSettings?.cancellation_days ?? 7} day(s) before arrival.
         </div>
 
-        <button onClick={handlePayNow} disabled={loading || !hasValidDates || hasOverlap} style={{ display:"block", width:"100%", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", border:"none", cursor: loading || !hasValidDates || hasOverlap ? "default" : "pointer", opacity: loading || !hasValidDates || hasOverlap ? 0.6 : 1, boxShadow:"0 4px 12px rgba(22,163,74,0.3)" }}>
-          {loading ? "Processing..." : "Pay Now"}
-        </button>
+        {requiresApplication ? (
+          <div>
+            <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:8, padding:"12px 14px", marginBottom:12, fontFamily:"sans-serif" }}>
+              <p style={{ fontSize:13, color:"#1e40af", margin:0, lineHeight:1.5 }}>
+                Stays of {backgroundCheckThresholdDays}+ days make you a resident, not just a
+                reservation — please complete a lease application (including a background check)
+                instead of paying here.
+              </p>
+            </div>
+            <a
+              href="https://aloharvparkfl.com/apply"
+              target="_top"
+              style={{ display:"block", width:"100%", boxSizing:"border-box", background:"linear-gradient(135deg,#1e3a8a,#2563eb)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", textDecoration:"none", boxShadow:"0 4px 12px rgba(37,99,235,0.3)" }}
+            >
+              Go to Lease Application
+            </a>
+          </div>
+        ) : (
+          <button onClick={handlePayNow} disabled={loading || !hasValidDates || hasOverlap} style={{ display:"block", width:"100%", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", border:"none", cursor: loading || !hasValidDates || hasOverlap ? "default" : "pointer", opacity: loading || !hasValidDates || hasOverlap ? 0.6 : 1, boxShadow:"0 4px 12px rgba(22,163,74,0.3)" }}>
+            {loading ? "Processing..." : "Pay Now"}
+          </button>
+        )}
         </>
         )}
       </div>
