@@ -106,6 +106,67 @@ export default async function handler(req, res) {
           console.error('Supabase lot order insert error:', error);
         }
 
+        // Safety net against a race condition: the availability check only
+        // runs once, when the checkout session is first created — if two
+        // people start checkout for overlapping dates on the same lot
+        // within that window, both could complete payment. This re-checks
+        // right after payment confirms and flags it for the admin instead
+        // of silently letting a double-booking go unnoticed.
+        if (lotId && arrivalDate && departureDate && !error) {
+          try {
+            const { data: otherOrders } = await supabase
+              .from('lot_orders')
+              .select('id, arrival_date, departure_date, customer_name, customer_email')
+              .eq('lot_id', lotId)
+              .eq('status', 'paid')
+              .neq('stripe_session_id', session.id);
+
+            const newArrival = new Date(arrivalDate + 'T00:00:00');
+            const newDeparture = new Date(departureDate + 'T00:00:00');
+            const conflicting = (otherOrders || []).filter((o) => {
+              if (!o.arrival_date || !o.departure_date) return false;
+              const oStart = new Date(o.arrival_date + 'T00:00:00');
+              const oEnd = new Date(o.departure_date + 'T00:00:00');
+              return newArrival < oEnd && newDeparture > oStart;
+            });
+
+            if (conflicting.length > 0) {
+              console.error(
+                `DOUBLE-BOOKING DETECTED on lot ${lotId}: session ${session.id} overlaps with`,
+                conflicting.map((o) => o.id)
+              );
+
+              await supabase
+                .from('lot_orders')
+                .update({ has_conflict: true })
+                .eq('stripe_session_id', session.id);
+
+              const conflictIds = conflicting.map((o) => o.id);
+              await supabase
+                .from('lot_orders')
+                .update({ has_conflict: true })
+                .in('id', conflictIds);
+
+              const { data: company } = await supabase
+                .from('companies')
+                .select('id')
+                .eq('park_id', 'aloha')
+                .single();
+
+              if (company) {
+                await supabase.from('resident_update_notifications').insert({
+                  company_id: company.id,
+                  resident_name: null,
+                  update_type: 'double_booking_alert',
+                  message: `⚠️ Possible double-booking on Lot ${lotId}: two paid reservations overlap for ${arrivalDate} to ${departureDate}. Review and contact both customers.`,
+                });
+              }
+            }
+          } catch (conflictCheckErr) {
+            console.error('Error running double-booking safety check:', conflictCheckErr);
+          }
+        }
+
         // Long-term stays (monthly/yearly) become residents (occupied/red).
         // Short-term stays (weekly/daily only) are just reserved (orange).
         const isLongTerm = isYearly === 'true' || parseInt(months, 10) > 0;

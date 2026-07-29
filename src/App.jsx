@@ -1033,7 +1033,7 @@ export default function AlohaMap() {
 
       <div style={{ padding:"16px 16px 0", textAlign:"center" }}>
         <p style={{ color:"#166534", fontWeight:600, margin:0, fontSize:14 }}>
-          Click any <span style={{ color:"#16a34a" }}>🟢 green lot</span> to reserve it. Hover to see the lot number.
+          Click any <span style={{ color:"#16a34a" }}>🟢 green</span> or <span style={{ color:"#ca8a04" }}>🟡 orange</span> lot to check availability and reserve it. Hover to see the lot number.
         </p>
       </div>
 
