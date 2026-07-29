@@ -194,7 +194,7 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 8 }}>
-            <span>Card Processing Fee (4%)</span>
+            <span>Card Processing Fee</span>
             <span>${processingFee.toFixed(2)}</span>
           </div>
           <div style={styles.totalRow}>
