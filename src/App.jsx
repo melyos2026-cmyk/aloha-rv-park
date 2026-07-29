@@ -290,7 +290,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, onClo
   const [error, setError] = useState("");
   const [bookedRanges, setBookedRanges] = useState([]);
   const [loadingAvailability, setLoadingAvailability] = useState(true);
-  const [allowLotBooking, setAllowLotBooking] = useState(true);
+  const [allowLotBooking, setAllowLotBooking] = useState(!lotInfo?.phone_only);
   const [listing, setListing] = useState(null);
   // Only 'available' and 'reserved' (soon-vacating, known move-out date) lots
   // can be booked here. A solid 'occupied' lot has no known availability at
@@ -482,7 +482,11 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, onClo
 
         {!(allowLotBooking && canBookStatus) && (
           <div style={{ background:"#f5f3ff", border:"1px solid #ddd6fe", borderRadius:8, padding:"12px 16px", marginBottom:16, fontFamily:"sans-serif" }}>
-            {status === "occupied" ? (
+            {lotInfo?.phone_only ? (
+              <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.6 }}>
+                This is a limited storage space — please call the office to check availability. Our team will confirm the space is the right size for your RV or trailer before booking.
+              </p>
+            ) : status === "occupied" ? (
               <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.6 }}>
                 This lot is currently under a month-to-month lease and is not available for rent at this time. Please check back later, or take a look at our other available{" "}
                 <span style={{ display:"inline-block", width:10, height:10, borderRadius:3, background: STATUS_SOLID.available, verticalAlign:"middle", margin:"0 2px" }} /> or soon-to-be-available{" "}
