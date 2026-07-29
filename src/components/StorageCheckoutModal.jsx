@@ -96,6 +96,13 @@ export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
             <div style={styles.descBox}>{lotInfo.description}</div>
           )}
 
+          {lotInfo?.phone_only ? (
+            <div style={styles.descBox}>
+              This is a limited storage space — please call the office to check availability. Our
+              team will confirm the space is the right size for your RV or trailer before booking.
+            </div>
+          ) : (
+          <>
           <label style={styles.label}>Billing Type</label>
           <select
             style={styles.select}
@@ -154,6 +161,8 @@ export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
           >
             {loading ? 'Processing...' : isSubscription ? 'Subscribe' : 'Pay Now'}
           </button>
+          </>
+          )}
         </div>
       </div>
     </div>
