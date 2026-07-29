@@ -315,7 +315,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, onClo
   }, [lot]);
 
   useEffect(() => {
-    fetch('/api/get-lot-availability?lotId=' + encodeURIComponent(lot))
+    fetch('/api/lot-data?type=availability&lotId=' + encodeURIComponent(lot))
       .then(res => res.json())
       .then(data => {
         setBookedRanges(Array.isArray(data) ? data : []);
@@ -691,7 +691,7 @@ function MyReservationsModal({ parkSettings, onClose }) {
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/get-my-bookings?email=' + encodeURIComponent(email));
+      const res = await fetch('/api/lot-data?type=my-bookings&email=' + encodeURIComponent(email));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not fetch bookings');
       setBookings(data);
@@ -866,7 +866,7 @@ export default function AlohaMap() {
 
     let attempts = 0;
     function fetchOrder() {
-      fetch(`/api/get-propane-order?session_id=${encodeURIComponent(sessionId)}`)
+      fetch(`/api/propane-data?type=order&session_id=${encodeURIComponent(sessionId)}`)
         .then((res) => res.json())
         .then((result) => {
           if (result.order) {
@@ -919,7 +919,7 @@ export default function AlohaMap() {
       // truth shared with the lease application / reservation systems, not
       // the old disconnected map_elements "statuses" blob.
       try {
-        const statusRes = await fetch('/api/get-lot-statuses?park_id=' + PARK_ID);
+        const statusRes = await fetch('/api/lot-data?type=statuses&park_id=' + PARK_ID);
         if (statusRes.ok) {
           const liveStatuses = await statusRes.json();
           setStatuses(prev => ({ ...prev, ...liveStatuses }));
@@ -928,7 +928,7 @@ export default function AlohaMap() {
         console.error('Error loading live lot statuses:', err);
       }
       try {
-        const reservedRes = await fetch('/api/get-lot-reserved-dates?park_id=' + PARK_ID);
+        const reservedRes = await fetch('/api/lot-data?type=reserved-dates&park_id=' + PARK_ID);
         if (reservedRes.ok) {
           setReservedDates(await reservedRes.json());
         }
@@ -943,7 +943,7 @@ export default function AlohaMap() {
       // price_yearly (rarely used, no rv_lots equivalent) still comes from
       // lot_info's own manual entry.
       try {
-        const pricingRes = await fetch('/api/get-lot-pricing?park_id=' + PARK_ID);
+        const pricingRes = await fetch('/api/lot-data?type=pricing&park_id=' + PARK_ID);
         if (pricingRes.ok) {
           const livePricing = await pricingRes.json();
           Object.keys(livePricing).forEach((lotName) => {

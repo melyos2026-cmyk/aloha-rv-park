@@ -16,7 +16,7 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
   const [tax, setTax] = useState({ enabled: false, ratePercent: 0 });
 
   useEffect(() => {
-    fetch(`/api/get-propane-pricing?park_id=${PARK_ID}`)
+    fetch(`/api/propane-data?type=pricing&park_id=${PARK_ID}`)
       .then((res) => res.json())
       .then((result) => {
         const rawList = result.products || [];
