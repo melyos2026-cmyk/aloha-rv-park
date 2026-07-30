@@ -331,7 +331,7 @@ export default async function handler(req, res) {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                from: 'Aloha RV Park <onboarding@resend.dev>',
+                from: 'Aloha RV Park <noreply@aloharvparkfl.com>',
                 to: customerEmail,
                 subject: 'Your Propane Pickup QR Code',
                 html: `
