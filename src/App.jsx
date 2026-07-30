@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import PropaneCheckoutModal from './components/PropaneCheckoutModal';
 import StorageCheckoutModal from './components/StorageCheckoutModal';
 import LotCheckoutModal from './components/LotCheckoutModal';
@@ -1347,7 +1348,7 @@ export default function AlohaMap() {
                 </div>
               )}
 
-              {!editMode && !isInfoOnly && activeEmoji === item.id && (item.label || item.info) && (
+              {!editMode && !isInfoOnly && activeEmoji === item.id && (item.label || item.info) && createPortal(
                 <div onClick={()=>setActiveEmoji(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1999, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
                   <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:20, padding:"24px 28px", minWidth:280, maxWidth:360, width:"100%", boxShadow:"0 24px 64px rgba(0,0,0,0.4)", fontFamily:"sans-serif", position:"relative" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
@@ -1383,7 +1384,7 @@ export default function AlohaMap() {
                     </div>
                   </div>
                 </div>
-              )}
+              , document.body)}
 
                             {/* no tooltip - title only shows in popup */}
             </Rnd>
