@@ -19,7 +19,7 @@ function calcStay(arrivalStr, departureStr, hasWeekly) {
   const totalNights = Math.round((departure - arrival) / 86400000);
 
   if (totalNights === 365) {
-    return { isYearly: true, months: 0, weeks: 0, extraDays: 0, totalNights: totalNights + 1 };
+    return { isYearly: true, months: 0, weeks: 0, extraDays: 0, totalNights };
   }
 
   let months = 0;
@@ -36,10 +36,12 @@ function calcStay(arrivalStr, departureStr, hasWeekly) {
   }
   const remainingAfterMonths = Math.round((departure - cursor) / 86400000);
   const weeks = hasWeekly ? Math.floor(remainingAfterMonths / 7) : 0;
-  const leftoverExclusive = remainingAfterMonths - (weeks * 7);
-  const extraDays = leftoverExclusive > 0 ? leftoverExclusive + 1 : 0;
+  // Standard checkin/checkout billing: nights = departure - arrival,
+  // no extra padded day (e.g. Thu 4pm arrival to Sat 11am departure = 2
+  // nights, not 3).
+  const extraDays = remainingAfterMonths - (weeks * 7);
 
-  return { isYearly: false, months, weeks, extraDays, totalNights: totalNights + 1 };
+  return { isYearly: false, months, weeks, extraDays, totalNights };
 }
 
 export default async function handler(req, res) {

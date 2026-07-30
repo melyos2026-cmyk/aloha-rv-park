@@ -259,7 +259,7 @@ function calcStayPreview(arrivalStr, departureStr, hasWeekly) {
   const totalNights = Math.round((departure - arrival) / 86400000);
 
   if (totalNights === 365) {
-    return { isYearly: true, months: 0, weeks: 0, extraDays: 0, totalNights: totalNights + 1 };
+    return { isYearly: true, months: 0, weeks: 0, extraDays: 0, totalNights };
   }
 
   let months = 0;
@@ -276,12 +276,11 @@ function calcStayPreview(arrivalStr, departureStr, hasWeekly) {
   }
   const remainingAfterMonths = Math.round((departure - cursor) / 86400000);
   const weeks = hasWeekly ? Math.floor(remainingAfterMonths / 7) : 0;
-  const leftoverExclusive = remainingAfterMonths - (weeks * 7);
-  // Both arrival and departure days are billable, so any leftover daily
-  // segment counts one extra day (e.g. 7/3 to 7/9 = 7 billable days, not 6 nights).
-  const extraDays = leftoverExclusive > 0 ? leftoverExclusive + 1 : 0;
+  // Standard checkin/checkout billing: nights = departure date - arrival
+  // date (e.g. arrive Thu 7/30 4pm, depart Sat 8/1 11am = 2 nights, not 3).
+  const extraDays = remainingAfterMonths - (weeks * 7);
 
-  return { isYearly: false, months, weeks, extraDays, totalNights: totalNights + 1 };
+  return { isYearly: false, months, weeks, extraDays, totalNights };
 }
 
 function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requiresCallOffice, onClose }) {
@@ -734,7 +733,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
             </a>
           </div>
         ) : (
-          <button onClick={handlePayNow} disabled={loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength} style={{ display:"block", width:"100%", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", border:"none", cursor: loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength ? "default" : "pointer", opacity: loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength ? 0.6 : 1, boxShadow:"0 4px 12px rgba(22,163,74,0.3)" }}>
+          <button onClick={handlePayNow} disabled={loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength} style={{ display:"block", width:"100%", background: (loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength) ? "#9ca3af" : "linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", border:"none", cursor: loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength ? "default" : "pointer", boxShadow: (loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength) ? "none" : "0 4px 12px rgba(22,163,74,0.3)" }}>
             {loading ? "Processing..." : "Pay Now"}
           </button>
         )}
