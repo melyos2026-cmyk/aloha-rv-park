@@ -1756,18 +1756,18 @@ export default function AlohaMap() {
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:8 }}>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max RV Length (ft)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.max_length || 45}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_length:parseInt(e.target.value)}}))}
+                        <input type="number" defaultValue={lotInfo[activeEditLot]?.max_length_ft || lotInfo[activeEditLot]?.max_length || 45}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_length_ft:parseInt(e.target.value)}}))}
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Amperage</label>
-                        <select defaultValue={lotInfo[activeEditLot]?.amperage || 50}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], amperage:parseInt(e.target.value)}}))}
+                        <select defaultValue={lotInfo[activeEditLot]?.amp_service || String(lotInfo[activeEditLot]?.amperage || 50)}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], amp_service:e.target.value}}))}
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
-                          <option value={30}>30 Amp</option>
-                          <option value={50}>50 Amp</option>
-                          <option value={30.50}>30/50 Amp</option>
+                          <option value="30">30 Amp</option>
+                          <option value="50">50 Amp</option>
+                          <option value="30/50">30/50 Amp</option>
                         </select>
                       </div>
                       <div>
@@ -1822,15 +1822,15 @@ export default function AlohaMap() {
                     <button onClick={async ()=>{
                       const info = lotInfo[activeEditLot] || {};
                       await saveLotInfo(PARK_ID, activeEditLot, {
-                        max_length: info.max_length || 45,
-                        amperage: info.amperage || 50,
                         price_yearly: info.price_yearly || null,
                         description: info.description || ""
                       });
-                      // Real pricing (base/high/low season, daily/weekly rate)
-                      // lives in rv_lots, the same table admin.aloharvparkfl.com's
-                      // "Lots & Seasonal Pricing" screen manages — save it there
-                      // directly instead of the old disconnected lot_info fields.
+                      // Real lot specs guests actually see (max RV length,
+                      // amperage) and real pricing (base/high/low season,
+                      // daily/weekly rate) live in rv_lots, the same table
+                      // admin.aloharvparkfl.com's "Lots & Seasonal Pricing"
+                      // screen manages — save them there directly instead of
+                      // the old disconnected lot_info fields nobody reads.
                       await fetch('/api/set-lot-pricing', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1842,6 +1842,8 @@ export default function AlohaMap() {
                           lowSeasonPrice: info.low_season_price,
                           dailyRate: info.price_daily,
                           weeklyRate: info.price_weekly,
+                          maxLengthFt: info.max_length_ft,
+                          ampService: info.amp_service,
                         }),
                       });
                       alert("Lot info saved!");

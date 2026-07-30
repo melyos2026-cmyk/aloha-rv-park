@@ -6,11 +6,12 @@ const supabase = createClient(
 );
 
 // POST /api/set-lot-pricing
-// Body: { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate }
+// Body: { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService }
 // Writes straight to rv_lots — the same table admin.aloharvparkfl.com's
-// "Lots & Seasonal Pricing" screen manages, so editing pricing from the
-// map's edit mode and from that admin screen stay in sync automatically
-// (no separate lot_info pricing table involved).
+// "Lots & Seasonal Pricing" screen manages, so editing pricing (and now
+// max RV length / amperage) from the map's edit mode and from that admin
+// screen stay in sync automatically (no separate lot_info fields involved,
+// which guests never actually see — that was the bug).
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -18,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate } = req.body;
+    const { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService } = req.body;
 
     if (!parkId || !lotName) {
       return res.status(400).json({ error: 'parkId and lotName are required.' });
@@ -42,6 +43,8 @@ export default async function handler(req, res) {
         low_season_price: lowSeasonPrice === '' || lowSeasonPrice == null ? null : Number(lowSeasonPrice),
         daily_rate: dailyRate === '' || dailyRate == null ? null : Number(dailyRate),
         weekly_rate: weeklyRate === '' || weeklyRate == null ? null : Number(weeklyRate),
+        max_length_ft: maxLengthFt === '' || maxLengthFt == null ? null : Number(maxLengthFt),
+        amp_service: ampService === '' || ampService == null ? null : String(ampService),
       })
       .eq('company_id', company.id)
       .eq('lot_name', lotName);
