@@ -692,7 +692,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           </div>
         )}
 
-        {stay && (
+        {stay && !requiresApplication && (
           <div style={{ background:"#f0fdf4", borderRadius:8, padding:"10px 14px", marginBottom:16, fontFamily:"sans-serif", fontSize:14 }}>
             {breakdownLines.map((line,i) => (
               <div key={i} style={{ marginBottom:4, color:"#374151" }}>{line}</div>
@@ -701,6 +701,13 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
               <span style={{ fontWeight:600 }}>Total</span>
               <strong style={{ color:"#16a34a", fontSize:18 }}>${total.toLocaleString()}</strong>
             </div>
+          </div>
+        )}
+
+        {stay && requiresApplication && !!lotInfo?.price_monthly && (
+          <div style={{ background:"#f0fdf4", borderRadius:8, padding:"10px 14px", marginBottom:16, fontFamily:"sans-serif", fontSize:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <span style={{ color:"#374151" }}>Rent</span>
+            <strong style={{ color:"#16a34a", fontSize:18 }}>${lotInfo.price_monthly.toLocaleString()}/month</strong>
           </div>
         )}
 
