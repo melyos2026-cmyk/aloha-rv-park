@@ -683,17 +683,16 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, onClo
 
         {requiresApplication ? (
           <div>
-            <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:8, padding:"12px 14px", marginBottom:12, fontFamily:"sans-serif" }}>
-              <p style={{ fontSize:13, color:"#1e40af", margin:0, lineHeight:1.5 }}>
+            <div style={{ background:"#f5f3ff", border:"1px solid #ddd6fe", borderRadius:8, padding:"12px 14px", marginBottom:12, fontFamily:"sans-serif" }}>
+              <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.5 }}>
                 Stays of {backgroundCheckThresholdDays}+ days make you a resident, not just a
-                reservation — please complete a lease application (including a background check)
-                instead of paying here.
+                reservation — please complete a lease application (including a background check).
               </p>
             </div>
             <a
               href="https://aloharvparkfl.com/apply"
               target="_top"
-              style={{ display:"block", width:"100%", boxSizing:"border-box", background:"linear-gradient(135deg,#1e3a8a,#2563eb)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", textDecoration:"none", boxShadow:"0 4px 12px rgba(37,99,235,0.3)" }}
+              style={{ display:"block", width:"100%", boxSizing:"border-box", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", textDecoration:"none", boxShadow:"0 4px 12px rgba(22,163,74,0.3)" }}
             >
               Go to Lease Application
             </a>
