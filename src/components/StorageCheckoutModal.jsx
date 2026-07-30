@@ -3,7 +3,13 @@ import { useState } from 'react';
 const LABELS = { daily: 'Daily', monthly: 'Monthly', yearly: 'Yearly' };
 const UNIT_LABELS = { daily: 'day(s)', monthly: 'month(s)', yearly: 'year(s)' };
 
+// Limited storage spots — always call-the-office, regardless of any
+// lot_info.phone_only flag (which has been unreliable to keep in sync).
+// Checking the lot ID directly here means this can never silently fail.
+const PHONE_ONLY_LOTS = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
+
 export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
+  const isPhoneOnly = PHONE_ONLY_LOTS.includes(lotId) || !!lotInfo?.phone_only;
   const [billingType, setBillingType] = useState('monthly');
   const [quantity, setQuantity] = useState(1);
   const [isSubscription, setIsSubscription] = useState(false);
@@ -96,10 +102,15 @@ export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
             <div style={styles.descBox}>{lotInfo.description}</div>
           )}
 
-          {lotInfo?.phone_only ? (
-            <div style={styles.descBox}>
-              This is a limited storage space — please call the office to check availability. Our
-              team will confirm the space is the right size for your RV or trailer before booking.
+          {isPhoneOnly ? (
+            <div style={styles.detailsBox}>
+              <p style={{ margin: 0, fontSize: 13, color: '#374151', lineHeight: 1.6 }}>
+                Need RV storage?
+                <br />
+                Please contact the office for current availability and pricing.
+                <br />
+                📞 Phone: (689) 252-0567
+              </p>
             </div>
           ) : (
           <>
