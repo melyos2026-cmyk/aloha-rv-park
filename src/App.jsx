@@ -947,6 +947,7 @@ export default function AlohaMap() {
   const [payLotSelected, setPayLotSelected] = useState(null);
   const [confirmed, setConfirmed] = useState(null);
   const containerRef = useRef(null);
+  const [previewWidth, setPreviewWidth] = useState(null); // null = actual device width; 900/390 = forced preview
   const [scale, setScale] = useState({ w: 900, h: 1130 });
   const scaleFactor = (scale.w || 900) / 900;
   const [draftLots, setDraftLots] = useState(LOTS);
@@ -1049,7 +1050,7 @@ export default function AlohaMap() {
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, []);
+  }, [previewWidth]);
 
   useEffect(() => {
     async function loadData() {
@@ -1196,11 +1197,34 @@ export default function AlohaMap() {
         </p>
       </div>
 
+      {canEditMap && editMode && (
+        <div style={{ display:"flex", justifyContent:"center", gap:8, padding:"12px 16px 0" }}>
+          <button
+            onClick={() => setPreviewWidth(null)}
+            style={{ background: previewWidth === null ? "#166534" : "#e5e7eb", color: previewWidth === null ? "#fff" : "#374151", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}
+          >
+            📐 Auto (This Screen)
+          </button>
+          <button
+            onClick={() => setPreviewWidth(900)}
+            style={{ background: previewWidth === 900 ? "#166534" : "#e5e7eb", color: previewWidth === 900 ? "#fff" : "#374151", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}
+          >
+            💻 Desktop View
+          </button>
+          <button
+            onClick={() => setPreviewWidth(390)}
+            style={{ background: previewWidth === 390 ? "#166534" : "#e5e7eb", color: previewWidth === 390 ? "#fff" : "#374151", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}
+          >
+            📱 Mobile View
+          </button>
+        </div>
+      )}
+
       {/* Map Container */}
       <div style={{ padding:16, display:"flex", justifyContent:"center" }}>
         <div
           ref={containerRef}
-          style={{ position:"relative", width:"100%", maxWidth:900, display:"inline-block", userSelect:"none" }}
+          style={{ position:"relative", width:"100%", maxWidth:previewWidth || 900, display:"inline-block", userSelect:"none", ...(previewWidth ? { border:"3px solid #166534", borderRadius:12, boxShadow:"0 4px 20px rgba(0,0,0,0.15)" } : {}) }}
           onClick={() => setActiveEmoji(null)}
           onMouseMove={editMode ? (e) => {
             if (!dragging) return;
