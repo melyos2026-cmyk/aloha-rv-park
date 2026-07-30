@@ -1358,7 +1358,7 @@ export default function AlohaMap() {
             <Rnd
               key={item.id}
               position={{ x: item.x / 100 * (scale.w || 900), y: item.y / 100 * (scale.h || 1130) }}
-              size={{ width: item.text.length * textSize * 0.6 + 20, height: textSize + 16 }}
+              size={{ width: item.text.length * textSize * 0.6 + 20 * scaleFactor, height: textSize + 16 * scaleFactor }}
               onDragStop={(e, d) => {
                 const nx = Math.round(d.x / (scale.w || 900) * 1000) / 10;
                 const ny = Math.round(d.y / (scale.h || 1130) * 1000) / 10;
@@ -1384,7 +1384,7 @@ export default function AlohaMap() {
             <Rnd
               key={item.id}
               position={{ x: item.x / 100 * (scale.w || 900), y: item.y / 100 * (scale.h || 1130) }}
-              size={{ width: emojiSize + 8, height: emojiSize + 8 }}
+              size={{ width: emojiSize + 8 * scaleFactor, height: emojiSize + 8 * scaleFactor }}
               onDragStop={(e, d) => {
                 const nx = Math.round(d.x / (scale.w || 900) * 1000) / 10;
                 const ny = Math.round(d.y / (scale.h || 1130) * 1000) / 10;
