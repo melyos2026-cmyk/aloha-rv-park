@@ -883,7 +883,6 @@ export default function AlohaMap() {
   const [scale, setScale] = useState({ w: 900, h: 1130 });
   const [draftLots, setDraftLots] = useState(LOTS);
   const [activeEditLot, setActiveEditLot] = useState(null);
-  const [colorEditLot, setColorEditLot] = useState(null);
   const [snapLines, setSnapLines] = useState({ x: null, y: null });
   const [newLotName, setNewLotName] = useState("");
   const [texts, setTexts] = useState([]);
@@ -1207,11 +1206,11 @@ export default function AlohaMap() {
               );
             }
             if (editMode && isRestrictedEditor) {
-              // park_admin: can change this lot's color, but never move/resize it.
+              // park_admin: can change this lot's status/color/info, but never move/resize it.
               return (
                 <div
                   key={lot}
-                  onClick={() => setColorEditLot(lot)}
+                  onClick={() => setActiveEditLot(lot)}
                   style={{
                     position:"absolute",
                     left:`${x}%`, top:`${y}%`,
@@ -1219,11 +1218,11 @@ export default function AlohaMap() {
                     background: lotColors[lot] ? lotColors[lot] : STATUS_COLORS[status],
                     borderRadius: borderRadius,
                     clipPath: clipPath,
-                    border: colorEditLot === lot ? "2px solid #f59e0b" : "1.5px dashed rgba(255,255,255,0.8)",
+                    border: activeEditLot === lot ? "2px solid #f59e0b" : "1.5px dashed rgba(255,255,255,0.8)",
                     display:"flex", alignItems:"center", justifyContent:"center",
                     cursor:"pointer",
                     boxSizing:"border-box",
-                    zIndex: colorEditLot === lot ? 50 : 10,
+                    zIndex: activeEditLot === lot ? 50 : 10,
                     transform: `rotate(${rotations[lot] || 0}deg)`,
                   }}
                 >
@@ -1582,47 +1581,19 @@ export default function AlohaMap() {
           </div>
           )}
 
-          {colorEditLot && (
-            <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:3000 }}
-              onClick={() => setColorEditLot(null)}>
-              <div onClick={(e) => e.stopPropagation()} style={{ background:"#fff", borderRadius:12, padding:20, width:260, fontFamily:"sans-serif" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                  <strong style={{ fontSize:15 }}>Lot <span style={{ color:"#16a34a" }}>{colorEditLot}</span> color</strong>
-                  <button onClick={() => setColorEditLot(null)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer", color:"#888" }}>✕</button>
-                </div>
-                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
-                  <input type="color" value={lotColors[colorEditLot] || "#16a34a"}
-                    onChange={async (e) => {
-                      const updated = { ...lotColors, [colorEditLot]: e.target.value };
-                      setLotColors(updated);
-                      await saveToSupabase('lotColors', 'all', updated);
-                    }}
-                    style={{ width:48, height:36, border:"none", cursor:"pointer" }} />
-                  <span style={{ fontSize:13, color:"#374151" }}>Pick a color</span>
-                </div>
-                <button onClick={async () => {
-                  const updated = { ...lotColors };
-                  delete updated[colorEditLot];
-                  setLotColors(updated);
-                  await saveToSupabase('lotColors', 'all', updated);
-                }} style={{ width:"100%", background:"#f3f4f6", color:"#374151", border:"1px solid #d1d5db", padding:"8px 12px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600 }}>
-                  Reset to default color
-                </button>
-              </div>
-            </div>
-          )}
-
-          {isAdmin && activeEditLot && draftLots[activeEditLot] && (
+          {canEditMap && activeEditLot && draftLots[activeEditLot] && (
             <>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
                 <strong style={{ fontSize:15 }}>Editing: <span style={{ color:"#16a34a" }}>{activeEditLot}</span></strong>
                 <div style={{ display:"flex", gap:8 }}>
+                  {isAdmin && (
                   <button onClick={()=>{
                     if (window.confirm(`Delete lot ${activeEditLot}?`)) {
                       setDraftLots(prev=>{ const n={...prev}; delete n[activeEditLot]; return n; });
                       setActiveEditLot(null);
                     }
                   }} style={{ background:"#ef4444", color:"#fff", border:"none", padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Delete</button>
+                  )}
                   <button onClick={()=>setActiveEditLot(null)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer", color:"#888" }}>✕</button>
                 </div>
               </div>
@@ -1664,6 +1635,7 @@ export default function AlohaMap() {
                     style={{ background:"#f3f4f6", border:"1px solid #d1d5db", padding:"4px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Reset</button>
                 </div>
               </div>
+              {isAdmin && (
               <div style={{ marginBottom:10 }}>
                 <span style={{ fontSize:12, fontWeight:600, color:"#6b7280" }}>ROTATION</span>
                 <div style={{ display:"flex", gap:8, marginTop:6, alignItems:"center" }}>
@@ -1675,6 +1647,8 @@ export default function AlohaMap() {
                     style={{ background:"#f3f4f6", border:"1px solid #d1d5db", padding:"4px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Reset</button>
                 </div>
               </div>
+              )}
+              {isAdmin && (
               <div style={{ marginBottom:10 }}>
                 <span style={{ fontSize:12, fontWeight:600, color:"#6b7280" }}>SHAPE</span>
                 <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
@@ -1686,6 +1660,7 @@ export default function AlohaMap() {
                   ))}
                 </div>
               </div>
+              )}
               <div style={{ marginBottom:12, background:"#f0fdf4", borderRadius:10, padding:12 }}>
                 <strong style={{ fontSize:13, color:"#166534" }}>Lot Details (visible to guests)</strong>
                 {activeEditLot.startsWith("S") ? (
