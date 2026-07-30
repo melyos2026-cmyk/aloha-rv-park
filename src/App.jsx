@@ -286,6 +286,7 @@ function calcStayPreview(arrivalStr, departureStr, hasWeekly) {
 
 function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requiresCallOffice, onClose }) {
   const [form, setForm] = useState({ arrival: "", departure: "", rvLength: "" });
+  const [longStay, setLongStay] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [bookedRanges, setBookedRanges] = useState([]);
@@ -369,7 +370,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
   const backgroundCheckThresholdDays =
     Number(parkSettings?.lease_defaults?.background_check_threshold_days) || 15;
   const requiresApplication =
-    !!stay && (stay.isYearly || stay.totalNights > backgroundCheckThresholdDays);
+    longStay || (!!stay && (stay.isYearly || stay.totalNights > backgroundCheckThresholdDays));
 
   let total = 0;
   let breakdownLines = [];
@@ -663,7 +664,10 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
             <label style={lbl}>Arrival</label>
             <DatePicker
               selected={form.arrival ? new Date(form.arrival + "T00:00:00") : null}
-              onChange={(date) => setForm({...form, arrival: date ? date.toISOString().split("T")[0] : ""})}
+              onChange={(date) => {
+                setLongStay(false);
+                setForm({...form, arrival: date ? date.toISOString().split("T")[0] : "", departure: ""});
+              }}
               minDate={new Date()}
               excludeDateIntervals={excludeDateIntervals}
               dateFormat="MM/dd/yyyy"
@@ -672,11 +676,21 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
               className="lot-date-input"
             />
           </div>
+          {!longStay && (
           <div>
             <label style={lbl}>Departure</label>
             <DatePicker
               selected={form.departure ? new Date(form.departure + "T00:00:00") : null}
-              onChange={(date) => setForm({...form, departure: date ? date.toISOString().split("T")[0] : ""})}
+              onChange={(date) => {
+                const newDeparture = date ? date.toISOString().split("T")[0] : "";
+                const tentative = newDeparture && form.arrival ? calcStayPreview(form.arrival, newDeparture, hasWeekly) : null;
+                if (tentative && !tentative.isYearly && tentative.totalNights > 32) {
+                  setLongStay(true);
+                  setForm({...form, departure: ""});
+                  return;
+                }
+                setForm({...form, departure: newDeparture});
+              }}
               minDate={form.arrival ? new Date(form.arrival + "T00:00:00") : new Date()}
               excludeDateIntervals={excludeDateIntervalsForDeparture}
               dateFormat="MM/dd/yyyy"
@@ -685,7 +699,17 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
               className="lot-date-input"
             />
           </div>
+          )}
         </div>
+
+        {longStay && (
+          <div style={{ fontSize:12, color:"#6b7280", marginBottom:12, fontFamily:"sans-serif" }}>
+            Not sure how long you're staying yet? That's fine — you'll set your move-out date (if you know it) in the lease application.{" "}
+            <button type="button" onClick={()=>setLongStay(false)} style={{ background:"none", border:"none", padding:0, color:"#16a34a", textDecoration:"underline", cursor:"pointer", fontSize:12 }}>
+              Pick a departure date instead
+            </button>
+          </div>
+        )}
 
         {hasOverlap && (
           <div style={{ background:"#fef2f2", color:"#dc2626", padding:"8px 10px", borderRadius:8, fontSize:13, marginBottom:12, fontFamily:"sans-serif" }}>
@@ -705,7 +729,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           </div>
         )}
 
-        {stay && requiresApplication && !!lotInfo?.price_monthly && (
+        {requiresApplication && !!lotInfo?.price_monthly && (
           <div style={{ background:"#f0fdf4", borderRadius:8, padding:"10px 14px", marginBottom:16, fontFamily:"sans-serif", fontSize:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <span style={{ color:"#374151" }}>Rent</span>
             <strong style={{ color:"#16a34a", fontSize:18 }}>${lotInfo.price_monthly.toLocaleString()}/month</strong>
