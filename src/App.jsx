@@ -106,7 +106,14 @@ async function saveParkSettings(settings) {
   return res.ok;
 }
 async function loadParkSettings() {
-  const res = await fetch(SUPABASE_URL + '/rest/v1/park_settings?id=eq.1', {
+  // Resolve this park's own company_id first, then load ITS park_settings
+  // row — was previously hardcoded to id=eq.1 (assumed there'd only ever
+  // be one park_settings row), which would silently read another park's
+  // settings once a 2nd company exists on the platform.
+  const companyId = await getCompanyId();
+  if (!companyId) return null;
+
+  const res = await fetch(SUPABASE_URL + '/rest/v1/park_settings?company_id=eq.' + companyId, {
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
   });
   if (!res.ok) return null;

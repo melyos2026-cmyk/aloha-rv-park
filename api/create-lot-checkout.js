@@ -134,10 +134,18 @@ export default async function handler(req, res) {
     // admin-editable, default 15 days) — and any yearly stay — mean the
     // guest is becoming a resident and must go through the lease
     // application (with background check), not a direct online payment.
+    // Scoped to THIS park's own company_id — was previously hardcoded to
+    // id=1, which would silently read another park's settings once a 2nd
+    // company exists on the platform.
+    const { data: companyRow } = await supabase
+      .from('companies')
+      .select('id')
+      .eq('park_id', PARK_ID)
+      .maybeSingle();
     const { data: parkSettingsRow } = await supabase
       .from('park_settings')
       .select('lease_defaults')
-      .eq('id', 1)
+      .eq('company_id', companyRow?.id)
       .maybeSingle();
     const thresholdDays =
       Number(parkSettingsRow?.lease_defaults?.background_check_threshold_days) || 15;

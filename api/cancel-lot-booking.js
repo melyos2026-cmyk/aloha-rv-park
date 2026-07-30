@@ -75,11 +75,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'This booking is not eligible for cancellation' });
     }
 
+    // Scoped to THIS park's own company_id — was previously hardcoded to
+    // id=1, which would silently read another park's settings once a 2nd
+    // company exists on the platform.
+    const { data: companyRow } = await supabase
+      .from('companies')
+      .select('id')
+      .eq('park_id', PARK_ID)
+      .maybeSingle();
     const { data: settings } = await supabase
       .from('park_settings')
       .select('cancellation_days')
-      .eq('id', 1)
-      .single();
+      .eq('company_id', companyRow?.id)
+      .maybeSingle();
 
     const cancellationDays = settings?.cancellation_days ?? 7;
 
