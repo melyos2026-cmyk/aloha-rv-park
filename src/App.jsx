@@ -285,7 +285,7 @@ function calcStayPreview(arrivalStr, departureStr, hasWeekly) {
 }
 
 function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requiresCallOffice, onClose }) {
-  const [form, setForm] = useState({ arrival: "", departure: "" });
+  const [form, setForm] = useState({ arrival: "", departure: "", rvLength: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [bookedRanges, setBookedRanges] = useState([]);
@@ -357,6 +357,10 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
   const hasOverlap = hasValidDates && rangeOverlaps(form.arrival, form.departure);
   const stay = hasValidDates && !hasOverlap ? calcStayPreview(form.arrival, form.departure, hasWeekly) : null;
 
+  const rvLengthNum = Number(form.rvLength) || 0;
+  const rvTooLong =
+    !!lotInfo?.max_length_ft && rvLengthNum > 0 && rvLengthNum > lotInfo.max_length_ft;
+
   // Stays longer than the park's background-check threshold (admin-editable
   // under Lease Defaults, default 15 days) — and any yearly stay — mean the
   // guest is becoming a resident, not making a short-term reservation. Those
@@ -390,6 +394,14 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
       setError(`Stays of ${backgroundCheckThresholdDays}+ days require a lease application instead.`);
       return;
     }
+    if (!form.rvLength) {
+      setError("Please enter your RV's length so we can confirm it fits this lot.");
+      return;
+    }
+    if (rvTooLong) {
+      setError(`This RV (${form.rvLength} ft) is too long for this lot (max ${lotInfo.max_length_ft} ft). Please choose a different lot.`);
+      return;
+    }
     if (!hasValidDates) {
       setError("Please select a valid arrival and departure date");
       return;
@@ -408,6 +420,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           lotId: lot,
           arrivalDate: form.arrival,
           departureDate: form.departure,
+          rvLength: form.rvLength,
         }),
       });
 
@@ -471,22 +484,41 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           </div>
         )}
 
-        {(lotInfo?.max_length || lotInfo?.amperage) && (
+        {(lotInfo?.max_length_ft || lotInfo?.amp_service) && (
           <div style={{ background:"#f9fafb", borderRadius:8, padding:"10px 12px", marginBottom:16, display:"flex", gap:16, fontFamily:"sans-serif" }}>
-            {lotInfo?.max_length && (
+            {lotInfo?.max_length_ft && (
               <div>
                 <span style={{ fontSize:11, color:"#6b7280" }}>Max RV Length: </span>
-                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.max_length}ft</span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.max_length_ft}ft</span>
               </div>
             )}
-            {lotInfo?.amperage && (
+            {lotInfo?.amp_service && (
               <div>
                 <span style={{ fontSize:11, color:"#6b7280" }}>Amperage: </span>
-                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.amperage} Amp</span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.amp_service} Amp</span>
               </div>
             )}
           </div>
         )}
+
+        <div style={{ marginBottom:16 }}>
+          <label style={{ fontSize:12, fontWeight:700, color:"#374151", display:"block", marginBottom:4, fontFamily:"sans-serif" }}>
+            Your RV Length (ft)
+          </label>
+          <input
+            type="number"
+            min="1"
+            value={form.rvLength}
+            onChange={(e) => setForm(f => ({ ...f, rvLength: e.target.value }))}
+            placeholder="e.g. 32"
+            style={{ width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:8, border: rvTooLong ? "1px solid #dc2626" : "1px solid #ddd", fontSize:14, fontFamily:"sans-serif" }}
+          />
+          {rvTooLong && (
+            <div style={{ fontSize:12, color:"#dc2626", marginTop:4, fontFamily:"sans-serif" }}>
+              This RV ({form.rvLength} ft) is too long for this lot (max {lotInfo.max_length_ft} ft). Please choose a different lot.
+            </div>
+          )}
+        </div>
 
         {lotInfo?.description && (
           <div style={{ background:"#f0fdf4", borderRadius:8, padding:"8px 12px", marginBottom:16, fontSize:13, color:"#166534", fontFamily:"sans-serif" }}>
@@ -702,7 +734,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
             </a>
           </div>
         ) : (
-          <button onClick={handlePayNow} disabled={loading || !hasValidDates || hasOverlap} style={{ display:"block", width:"100%", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", border:"none", cursor: loading || !hasValidDates || hasOverlap ? "default" : "pointer", opacity: loading || !hasValidDates || hasOverlap ? 0.6 : 1, boxShadow:"0 4px 12px rgba(22,163,74,0.3)" }}>
+          <button onClick={handlePayNow} disabled={loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength} style={{ display:"block", width:"100%", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", border:"none", cursor: loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength ? "default" : "pointer", opacity: loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength ? 0.6 : 1, boxShadow:"0 4px 12px rgba(22,163,74,0.3)" }}>
             {loading ? "Processing..." : "Pay Now"}
           </button>
         )}

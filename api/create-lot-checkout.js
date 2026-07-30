@@ -49,7 +49,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { lotId, arrivalDate, departureDate, customerEmail } = req.body || {};
+    const { lotId, arrivalDate, departureDate, customerEmail, rvLength } = req.body || {};
 
     if (!lotId || !arrivalDate || !departureDate) {
       return res.status(400).json({ error: 'Missing lot ID or dates' });
@@ -87,12 +87,22 @@ export default async function handler(req, res) {
     // Check for overlapping paid reservations OR active resident leases on this lot
     const { data: lotRow, error: lotRowErr } = await supabase
       .from('rv_lots')
-      .select('id')
+      .select('id, max_length_ft')
       .eq('lot_name', lotId)
       .single();
 
     if (lotRowErr || !lotRow) {
       return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    const rvLengthNum = Number(rvLength) || 0;
+    if (!rvLengthNum) {
+      return res.status(400).json({ error: "RV length is required to book this lot." });
+    }
+    if (lotRow.max_length_ft && rvLengthNum > lotRow.max_length_ft) {
+      return res.status(400).json({
+        error: `This RV (${rvLengthNum} ft) is too long for this lot (max ${lotRow.max_length_ft} ft). Please choose a different lot.`,
+      });
     }
 
     const { data: blockedRanges, error: ordersError } = await supabase.rpc(

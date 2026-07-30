@@ -58,7 +58,7 @@ async function getPricing(req, res) {
 
   const { data: lots, error: lotsErr } = await supabase
     .from('rv_lots')
-    .select('lot_name, base_price, high_season_price, low_season_price, daily_rate, weekly_rate')
+    .select('lot_name, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, max_length_ft, amp_service')
     .eq('company_id', company.id);
 
   if (lotsErr) throw lotsErr;
@@ -88,6 +88,8 @@ async function getPricing(req, res) {
       base_price: l.base_price || null,
       high_season_price: l.high_season_price || null,
       low_season_price: l.low_season_price || null,
+      max_length_ft: l.max_length_ft || null,
+      amp_service: l.amp_service || null,
     };
   });
 
