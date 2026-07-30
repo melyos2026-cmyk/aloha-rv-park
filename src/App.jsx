@@ -284,13 +284,13 @@ function calcStayPreview(arrivalStr, departureStr, hasWeekly) {
   return { isYearly: false, months, weeks, extraDays, totalNights: totalNights + 1 };
 }
 
-function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, onClose }) {
+function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requiresCallOffice, onClose }) {
   const [form, setForm] = useState({ arrival: "", departure: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [bookedRanges, setBookedRanges] = useState([]);
   const [loadingAvailability, setLoadingAvailability] = useState(true);
-  const [allowLotBooking, setAllowLotBooking] = useState(!lotInfo?.phone_only);
+  const [allowLotBooking, setAllowLotBooking] = useState(!lotInfo?.phone_only && !requiresCallOffice);
   const [listing, setListing] = useState(null);
   // Only 'available' and 'reserved' (soon-vacating, known move-out date) lots
   // can be booked here. A solid 'occupied' lot has no known availability at
@@ -499,6 +499,10 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, onClo
             {lotInfo?.phone_only ? (
               <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.6 }}>
                 This is a limited storage space — please call the office to check availability. Our team will confirm the space is the right size for your RV or trailer before booking.
+              </p>
+            ) : requiresCallOffice ? (
+              <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.6 }}>
+                Please call the office to check availability and pricing for this lot before booking.
               </p>
             ) : status === "occupied" ? (
               <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.6 }}>
@@ -836,6 +840,7 @@ const emojiHoverStyle = `
 
 export default function AlohaMap() {
   const [statuses, setStatuses] = useState(initStatuses);
+  const [bookingDisabled, setBookingDisabled] = useState({});
   const [reservedDates, setReservedDates] = useState({});
   const [hover, setHover] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -953,8 +958,9 @@ export default function AlohaMap() {
       try {
         const statusRes = await fetch('/api/lot-data?type=statuses&park_id=' + PARK_ID);
         if (statusRes.ok) {
-          const liveStatuses = await statusRes.json();
-          setStatuses(prev => ({ ...prev, ...liveStatuses }));
+          const { statuses: liveStatusMap, bookingDisabled: liveBookingDisabled } = await statusRes.json();
+          setStatuses(prev => ({ ...prev, ...(liveStatusMap || {}) }));
+          setBookingDisabled(liveBookingDisabled || {});
         }
       } catch (err) {
         console.error('Error loading live lot statuses:', err);
@@ -1905,6 +1911,7 @@ export default function AlohaMap() {
           lotInfo={lotInfo[selected.lot]}
           parkSettings={parkSettings}
           reservedUntil={reservedDates[selected.lot]}
+          requiresCallOffice={!!bookingDisabled[selected.lot]}
           onClose={() => setSelected(null)}
         />
       )}
