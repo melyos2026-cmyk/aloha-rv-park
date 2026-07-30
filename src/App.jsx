@@ -906,6 +906,35 @@ const emojiHoverStyle = `
   transform: scale(1.25);
   filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.9));
 }
+.map-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.map-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, auto));
+  gap: 12px 28px;
+}
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+@media (max-width: 620px) {
+  .map-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .map-legend {
+    grid-template-columns: repeat(2, 1fr);
+    width: 100%;
+    gap: 12px 16px;
+  }
+}
 `;
 
 export default function AlohaMap() {
@@ -1146,16 +1175,16 @@ export default function AlohaMap() {
     <div style={{ minHeight:"100vh", background:"#f0fdf4", fontFamily:"sans-serif" }}>
       <style>{emojiHoverStyle}</style>
       {/* Header */}
-      <div style={{ background:"linear-gradient(135deg,#14532d,#16a34a)", padding:"16px 24px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+      <div className="map-header" style={{ background:"linear-gradient(135deg,#14532d,#16a34a)", padding:"24px" }}>
         <div>
           <div style={{ fontFamily:"Georgia,serif", fontWeight:900, fontSize:22, color:"#fff" }}>🌺 Aloha RV Park</div>
-          <div style={{ fontSize:12, color:"rgba(255,255,255,0.8)", letterSpacing:1 }}>INTERACTIVE LOT MAP · KISSIMMEE, FL</div>
+          <div style={{ fontSize:12, color:"rgba(255,255,255,0.8)", letterSpacing:1, marginTop:4 }}>INTERACTIVE LOT MAP · KISSIMMEE, FL</div>
         </div>
-        <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+        <div className="map-legend">
           {Object.entries(STATUS_COLORS).map(([s,c]) => (
-            <div key={s} style={{ display:"flex", alignItems:"center", gap:5 }}>
-              <div style={{ width:12, height:12, borderRadius:3, background:STATUS_SOLID[s] }} />
-              <span style={{ color:"#fff", fontSize:11, textTransform:"capitalize", fontWeight:600 }}>{s.replace(/_/g," ")} ({counts[s]||0})</span>
+            <div key={s} className="map-legend-item">
+              <div style={{ width:14, height:14, borderRadius:4, background:STATUS_SOLID[s], flexShrink:0 }} />
+              <span style={{ color:"#fff", fontSize:13, textTransform:"capitalize", fontWeight:600 }}>{s.replace(/_/g," ")} ({counts[s]||0})</span>
             </div>
           ))}
         </div>
