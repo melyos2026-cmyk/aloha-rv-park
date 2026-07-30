@@ -14,6 +14,7 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 console.log("DEBUG SUPABASE_URL:", SUPABASE_URL);
 console.log("DEBUG SUPABASE_KEY length:", SUPABASE_KEY ? SUPABASE_KEY.length : "undefined/null");
 console.log("DEBUG all env:", import.meta.env);
+const PARK_ID_PROVIDED = typeof window !== "undefined" && !!new URLSearchParams(window.location.search).get("park_id");
 const PARK_ID = (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("park_id")) || 'aloha';
 let cachedCompanyId = null;
 async function getCompanyId() {
@@ -1157,6 +1158,18 @@ export default function AlohaMap() {
   };
 
   const counts = Object.values(statuses).reduce((acc, s) => { acc[s] = (acc[s]||0)+1; return acc; }, {});
+
+  if (!PARK_ID_PROVIDED) {
+    return (
+      <div style={{ minHeight:"100vh", background:"#f9fafb", display:"flex", alignItems:"center", justifyContent:"center", padding:20, fontFamily:"sans-serif" }}>
+        <div style={{ background:"#fff", borderRadius:16, padding:40, maxWidth:440, width:"100%", textAlign:"center", boxShadow:"0 10px 40px rgba(0,0,0,0.1)" }}>
+          <div style={{ fontSize:48, marginBottom:12 }}>⚠️</div>
+          <h1 style={{ fontSize:20, fontWeight:800, color:"#374151", marginBottom:8 }}>No Park Specified</h1>
+          <p style={{ fontSize:14, color:"#6b7280" }}>This map link is missing its park identifier and cannot be displayed. Please contact support instead of assuming any particular property's data.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (confirmed) {
     return (
