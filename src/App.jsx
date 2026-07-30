@@ -919,6 +919,7 @@ export default function AlohaMap() {
   const [confirmed, setConfirmed] = useState(null);
   const containerRef = useRef(null);
   const [scale, setScale] = useState({ w: 900, h: 1130 });
+  const scaleFactor = (scale.w || 900) / 900;
   const [draftLots, setDraftLots] = useState(LOTS);
   const [activeEditLot, setActiveEditLot] = useState(null);
   const [snapLines, setSnapLines] = useState({ x: null, y: null });
@@ -990,6 +991,24 @@ export default function AlohaMap() {
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
 
+
+  useEffect(() => {
+    if (window.self === window.top) return; // not embedded in an iframe, nothing to report
+
+    function reportHeight() {
+      const height = document.body.scrollHeight;
+      window.parent.postMessage({ type: "aloha-map-height", height }, "*");
+    }
+
+    reportHeight();
+    const observer = new ResizeObserver(reportHeight);
+    observer.observe(document.body);
+    window.addEventListener("load", reportHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("load", reportHeight);
+    };
+  }, []);
 
   useEffect(() => {
     const update = () => {
@@ -1304,11 +1323,13 @@ export default function AlohaMap() {
             );
           })}
           {/* Texts */}
-          {texts.map((item) => (
+          {texts.map((item) => {
+            const textSize = item.size * scaleFactor;
+            return (
             <Rnd
               key={item.id}
               position={{ x: item.x / 100 * (scale.w || 900), y: item.y / 100 * (scale.h || 1130) }}
-              size={{ width: item.text.length * item.size * 0.6 + 20, height: item.size + 16 }}
+              size={{ width: item.text.length * textSize * 0.6 + 20, height: textSize + 16 }}
               onDragStop={(e, d) => {
                 const nx = Math.round(d.x / (scale.w || 900) * 1000) / 10;
                 const ny = Math.round(d.y / (scale.h || 1130) * 1000) / 10;
@@ -1317,7 +1338,7 @@ export default function AlohaMap() {
               enableResizing={false}
               style={{ zIndex:200, cursor:"move" }}
             >
-              <div style={{ fontSize:item.size, color:item.color, fontWeight:700, textShadow:"0 1px 3px rgba(0,0,0,0.5)", whiteSpace:"nowrap", userSelect:"none" }}>
+              <div style={{ fontSize:textSize, color:item.color, fontWeight:700, textShadow:"0 1px 3px rgba(0,0,0,0.5)", whiteSpace:"nowrap", userSelect:"none" }}>
                 {item.text}
                 {editMode && (
                   <button onClick={()=>setTexts(prev=>prev.filter(t=>t.id!==item.id))}
@@ -1325,10 +1346,11 @@ export default function AlohaMap() {
                 )}
               </div>
             </Rnd>
-          ))}
+          );})}
           {/* Emojis */}
           {emojis.map((item) => {
-            const emojiSize = item.size || 24;
+            const rawSize = item.size || 24;
+            const emojiSize = rawSize * scaleFactor;
             return (
             <Rnd
               key={item.id}
@@ -1366,9 +1388,9 @@ export default function AlohaMap() {
                     rows={3}
                     style={{ width:"100%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, marginBottom:6, boxSizing:"border-box", resize:"vertical" }}
                   />
-                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>SIZE: {emojiSize}px</div>
+                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>SIZE: {rawSize}px</div>
                   <input
-                    type="range" min="12" max="80" value={emojiSize}
+                    type="range" min="12" max="80" value={rawSize}
                     onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, size: parseInt(e.target.value) } : em))}
                     style={{ width:"100%", marginBottom:8 }}
                   />
