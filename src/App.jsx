@@ -1027,7 +1027,7 @@ export default function AlohaMap() {
     if (window.self === window.top) return; // not embedded in an iframe, nothing to report
 
     function reportHeight() {
-      const height = document.body.scrollHeight;
+      const height = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
       window.parent.postMessage({ type: "aloha-map-height", height }, "*");
     }
 
@@ -1035,9 +1035,17 @@ export default function AlohaMap() {
     const observer = new ResizeObserver(reportHeight);
     observer.observe(document.body);
     window.addEventListener("load", reportHeight);
+
+    // Safety net: async data (lot statuses, images) can change height without a resize
+    // event always firing in time — re-check for the first few seconds after mount.
+    const interval = setInterval(reportHeight, 500);
+    const stopSafetyNet = setTimeout(() => clearInterval(interval), 8000);
+
     return () => {
       observer.disconnect();
       window.removeEventListener("load", reportHeight);
+      clearInterval(interval);
+      clearTimeout(stopSafetyNet);
     };
   }, []);
 
