@@ -1195,7 +1195,7 @@ export default function AlohaMap() {
   }
 
   return (
-    <div style={{ minHeight:"100vh", background:"#f0fdf4", fontFamily:"sans-serif" }}>
+    <div style={{ minHeight: window.self === window.top ? "100vh" : "auto", background:"#f0fdf4", fontFamily:"sans-serif" }}>
       <style>{emojiHoverStyle}</style>
       {/* Header */}
       <div className="map-header" style={{ background:"linear-gradient(135deg,#14532d,#16a34a)", padding:"24px" }}>
