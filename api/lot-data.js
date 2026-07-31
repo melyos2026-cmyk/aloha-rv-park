@@ -58,7 +58,7 @@ async function getPricing(req, res) {
 
   const { data: lots, error: lotsErr } = await supabase
     .from('rv_lots')
-    .select('lot_name, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, max_length_ft, amp_service, use_seasonal_pricing')
+    .select('lot_name, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, max_length_ft, amp_service, use_seasonal_pricing, weekly_high_season_price, weekly_low_season_price, daily_high_season_price, daily_low_season_price')
     .eq('company_id', company.id);
 
   if (lotsErr) throw lotsErr;
@@ -82,9 +82,19 @@ async function getPricing(req, res) {
     if (useSeasonal && hasSeasonDates && l.high_season_price != null && l.low_season_price != null) {
       monthly = inHighSeason ? l.high_season_price : l.low_season_price;
     }
+    let weekly = l.weekly_rate || null;
+    if (useSeasonal && hasSeasonDates) {
+      const seasonalWeekly = inHighSeason ? l.weekly_high_season_price : l.weekly_low_season_price;
+      if (seasonalWeekly != null) weekly = seasonalWeekly;
+    }
+    let daily = l.daily_rate || null;
+    if (useSeasonal && hasSeasonDates) {
+      const seasonalDaily = inHighSeason ? l.daily_high_season_price : l.daily_low_season_price;
+      if (seasonalDaily != null) daily = seasonalDaily;
+    }
     pricing[l.lot_name] = {
-      price_daily: l.daily_rate || null,
-      price_weekly: l.weekly_rate || null,
+      price_daily: daily,
+      price_weekly: weekly,
       price_monthly: monthly,
       base_price: l.base_price || null,
       high_season_price: l.high_season_price || null,

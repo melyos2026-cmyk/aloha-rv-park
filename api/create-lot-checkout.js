@@ -102,7 +102,7 @@ export default async function handler(req, res) {
     // Check for overlapping paid reservations OR active resident leases on this lot
     const { data: lotRow, error: lotRowErr } = await supabase
       .from('rv_lots')
-      .select('id, max_length_ft, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, use_seasonal_pricing')
+      .select('id, max_length_ft, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, use_seasonal_pricing, weekly_high_season_price, weekly_low_season_price, daily_high_season_price, daily_low_season_price')
       .eq('lot_name', lotId)
       .single();
 
@@ -187,8 +187,12 @@ export default async function handler(req, res) {
         effectiveMonthlyRate = lotRow.low_season_price;
       }
     }
-    const effectiveWeeklyRate = lotRow.weekly_rate;
-    const effectiveDailyRate = lotRow.daily_rate;
+    const effectiveWeeklyRate = useSeasonal
+      ? (inHighSeason ? lotRow.weekly_high_season_price : lotRow.weekly_low_season_price) || lotRow.weekly_rate
+      : lotRow.weekly_rate;
+    const effectiveDailyRate = useSeasonal
+      ? (inHighSeason ? lotRow.daily_high_season_price : lotRow.daily_low_season_price) || lotRow.daily_rate
+      : lotRow.daily_rate;
 
     const origin = req.headers.origin || `https://${req.headers.host}`;
     const lineItems = [];
