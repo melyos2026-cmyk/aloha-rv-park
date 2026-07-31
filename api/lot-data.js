@@ -58,7 +58,7 @@ async function getPricing(req, res) {
 
   const { data: lots, error: lotsErr } = await supabase
     .from('rv_lots')
-    .select('lot_name, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, max_length_ft, amp_service')
+    .select('lot_name, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, max_length_ft, amp_service, use_seasonal_pricing')
     .eq('company_id', company.id);
 
   if (lotsErr) throw lotsErr;
@@ -78,7 +78,8 @@ async function getPricing(req, res) {
   const pricing = {};
   (lots || []).forEach((l) => {
     let monthly = l.base_price || null;
-    if (hasSeasonDates && l.high_season_price != null && l.low_season_price != null) {
+    const useSeasonal = l.use_seasonal_pricing !== false;
+    if (useSeasonal && hasSeasonDates && l.high_season_price != null && l.low_season_price != null) {
       monthly = inHighSeason ? l.high_season_price : l.low_season_price;
     }
     pricing[l.lot_name] = {

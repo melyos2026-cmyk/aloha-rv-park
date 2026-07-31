@@ -9,6 +9,19 @@ const supabase = createClient(
 
 const PARK_ID = 'aloha';
 
+// Determines whether `dateStr` (YYYY-MM-DD) falls within the park's
+// configured high season (MM-DD to MM-DD, e.g. "10-01" to "04-30").
+// Handles a season that wraps across the new year (start > end).
+function isHighSeason(dateStr, startMonthDay, endMonthDay) {
+  if (!startMonthDay || !endMonthDay) return false;
+  const md = dateStr.slice(5); // "MM-DD"
+  if (startMonthDay <= endMonthDay) {
+    return md >= startMonthDay && md <= endMonthDay;
+  }
+  // Wraps across the new year (e.g. 10-01 to 04-30)
+  return md >= startMonthDay || md <= endMonthDay;
+}
+
 // Anniversary-date method: a "month" runs from the arrival day to the
 // same day next month, regardless of how many days that spans (28-31).
 // Remaining days after full months are split into full weeks (if the lot
@@ -89,7 +102,7 @@ export default async function handler(req, res) {
     // Check for overlapping paid reservations OR active resident leases on this lot
     const { data: lotRow, error: lotRowErr } = await supabase
       .from('rv_lots')
-      .select('id, max_length_ft')
+      .select('id, max_length_ft, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, use_seasonal_pricing')
       .eq('lot_name', lotId)
       .single();
 
@@ -127,7 +140,7 @@ export default async function handler(req, res) {
       return res.status(409).json({ error: 'These dates overlap with an existing reservation' });
     }
 
-    const hasWeekly = !!lotInfo.price_weekly;
+    const hasWeekly = !!lotRow.weekly_rate;
     const stay = calcStay(arrivalDate, departureDate, hasWeekly);
 
     // Stays past the park's background-check threshold (Lease Defaults,
@@ -144,7 +157,7 @@ export default async function handler(req, res) {
       .maybeSingle();
     const { data: parkSettingsRow } = await supabase
       .from('park_settings')
-      .select('lease_defaults')
+      .select('lease_defaults, high_season_start_month_day, high_season_end_month_day')
       .eq('company_id', companyRow?.id)
       .maybeSingle();
     const thresholdDays =
@@ -155,6 +168,27 @@ export default async function handler(req, res) {
         error: `Stays of ${thresholdDays}+ days require a lease application instead of online payment.`,
       });
     }
+
+    // Real pricing now comes from rv_lots (the table admin's Lots Pricing
+    // screen actually edits) instead of the old, disconnected lot_info
+    // table. The monthly rate is season-aware; weekly/daily are not (there's
+    // only one weekly_rate/daily_rate value per lot, no season variants yet).
+    const inHighSeason = isHighSeason(
+      arrivalDate,
+      parkSettingsRow?.high_season_start_month_day,
+      parkSettingsRow?.high_season_end_month_day
+    );
+    const useSeasonal = lotRow.use_seasonal_pricing !== false;
+    let effectiveMonthlyRate = lotRow.base_price;
+    if (useSeasonal) {
+      if (inHighSeason && lotRow.high_season_price) {
+        effectiveMonthlyRate = lotRow.high_season_price;
+      } else if (!inHighSeason && lotRow.low_season_price) {
+        effectiveMonthlyRate = lotRow.low_season_price;
+      }
+    }
+    const effectiveWeeklyRate = lotRow.weekly_rate;
+    const effectiveDailyRate = lotRow.daily_rate;
 
     const origin = req.headers.origin || `https://${req.headers.host}`;
     const lineItems = [];
@@ -173,40 +207,40 @@ export default async function handler(req, res) {
       });
     } else {
       if (stay.months > 0) {
-        if (!lotInfo.price_monthly || lotInfo.price_monthly <= 0) {
+        if (!effectiveMonthlyRate || effectiveMonthlyRate <= 0) {
           return res.status(400).json({ error: 'Monthly rate not available for this lot' });
         }
         lineItems.push({
           price_data: {
             currency: 'usd',
             product_data: { name: `RV Lot ${lotId} — ${stay.months} month(s)` },
-            unit_amount: Math.round(lotInfo.price_monthly * 100),
+            unit_amount: Math.round(effectiveMonthlyRate * 100),
           },
           quantity: stay.months,
         });
       }
       if (stay.weeks > 0) {
-        if (!lotInfo.price_weekly || lotInfo.price_weekly <= 0) {
+        if (!effectiveWeeklyRate || effectiveWeeklyRate <= 0) {
           return res.status(400).json({ error: 'Weekly rate not available for this lot' });
         }
         lineItems.push({
           price_data: {
             currency: 'usd',
             product_data: { name: `RV Lot ${lotId} — ${stay.weeks} week(s)` },
-            unit_amount: Math.round(lotInfo.price_weekly * 100),
+            unit_amount: Math.round(effectiveWeeklyRate * 100),
           },
           quantity: stay.weeks,
         });
       }
       if (stay.extraDays > 0) {
-        if (!lotInfo.price_daily || lotInfo.price_daily <= 0) {
+        if (!effectiveDailyRate || effectiveDailyRate <= 0) {
           return res.status(400).json({ error: 'Nightly rate not available for this lot' });
         }
         lineItems.push({
           price_data: {
             currency: 'usd',
             product_data: { name: `RV Lot ${lotId} — ${stay.extraDays} night(s)` },
-            unit_amount: Math.round(lotInfo.price_daily * 100),
+            unit_amount: Math.round(effectiveDailyRate * 100),
           },
           quantity: stay.extraDays,
         });
