@@ -654,7 +654,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           return (
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"10px 12px", marginBottom:12, fontFamily:"sans-serif" }}>
               <span style={{ fontSize:12.5, color:"#166534" }}>
-                Next available date: <strong>{label}</strong>
+                Next available date: <strong>{label}, 4:00 PM</strong> (check-out time)
               </span>
               <button
                 type="button"
