@@ -95,7 +95,13 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
         throw new Error(data.error || 'Error al crear el pago');
       }
 
-      window.location.href = data.url;
+      // Aug 5: Stripe Checkout can't run in an iframe — redirect the top
+      // window so it actually loads instead of silently failing.
+      try {
+        window.top.location.href = data.url;
+      } catch {
+        window.location.href = data.url;
+      }
     } catch (err) {
       setError(err.message || 'Algo salió mal. Intenta de nuevo.');
       setLoading(false);

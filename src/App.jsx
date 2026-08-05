@@ -436,7 +436,19 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error creating payment');
 
-      window.location.href = data.url;
+      // Aug 5 (per Mely — real bug, confirmed via console: "Stripe
+      // Checkout is not able to run in an iFrame"): this widget is
+      // ALWAYS embedded via iframe (even on the "public" site), and
+      // Stripe explicitly refuses to render Checkout inside one.
+      // Redirecting window.top instead breaks out to the real top-level
+      // browser tab so Stripe actually loads. Falls back to the normal
+      // redirect if window.top is inaccessible for any reason (e.g. a
+      // stricter cross-origin sandbox) rather than silently doing nothing.
+      try {
+        window.top.location.href = data.url;
+      } catch {
+        window.location.href = data.url;
+      }
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
       setLoading(false);
