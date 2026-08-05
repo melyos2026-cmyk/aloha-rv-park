@@ -278,11 +278,11 @@ export default async function handler(req, res) {
     // it) — MelyOS never takes any share of tax, only its processing fee.
     const { data: taxSettingsRow } = await supabase
       .from('company_tax_settings')
-      .select('enable_tax, manual_tax_rate_percent, tax_mode')
+      .select('enable_tax, manual_tax_rate_percent, reservations_tax_mode')
       .eq('company_id', companyRow?.id)
       .maybeSingle();
     const taxRatePercent = Number(taxSettingsRow?.manual_tax_rate_percent || 0);
-    const taxEnabled = !!taxSettingsRow?.enable_tax && taxRatePercent > 0 && taxSettingsRow?.tax_mode === 'excluded';
+    const taxEnabled = !!taxSettingsRow?.enable_tax && taxRatePercent > 0 && taxSettingsRow?.reservations_tax_mode === 'excluded';
     const taxCents = taxEnabled ? Math.round(subtotalCents * (taxRatePercent / 100)) : 0;
 
     if (taxCents > 0) {
