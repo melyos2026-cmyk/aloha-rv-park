@@ -57,6 +57,13 @@ function calcStay(arrivalStr, departureStr, hasWeekly) {
   return { isYearly: false, months, weeks, extraDays, totalNights };
 }
 
+// Aug 5 (per Mely): same processing-fee model as every other charge in the
+// system — 4% of the charge, or a $1.50 fixed minimum, whichever is
+// greater (guarantees real margin even on small/short bookings).
+function calculateProcessingFee(amount) {
+  return Math.max(amount * 0.04, 1.5);
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -157,7 +164,7 @@ export default async function handler(req, res) {
       .maybeSingle();
     const { data: parkSettingsRow } = await supabase
       .from('park_settings')
-      .select('lease_defaults, high_season_start_month_day, high_season_end_month_day')
+      .select('lease_defaults, high_season_start_month_day, high_season_end_month_day, stripe_connect_account_id, stripe_connect_onboarded')
       .eq('company_id', companyRow?.id)
       .maybeSingle();
     const thresholdDays =
@@ -255,11 +262,54 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Stay length is too short to book' });
     }
 
+    // Aug 5 (per Mely): add the processing fee (Aloha gets 100% of the
+    // real booking amount; MelyOS keeps only this fee) and split via
+    // Stripe Connect if Aloha has connected their bank account — same
+    // pattern as every other checkout in the system. Falls back to a
+    // normal unsplit charge if not connected yet, so bookings still work.
+    const subtotalCents = lineItems.reduce((sum, li) => sum + li.price_data.unit_amount * li.quantity, 0);
+    const processingFeeCents = Math.round(calculateProcessingFee(subtotalCents / 100) * 100);
+
+    const { data: feeSettingsRow } = await supabase
+      .from('company_fee_settings')
+      .select('pass_processing_fee_to_resident')
+      .eq('company_id', companyRow?.id)
+      .maybeSingle();
+    const passFeeToResident = feeSettingsRow?.pass_processing_fee_to_resident !== false;
+
+    if (passFeeToResident) {
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: { name: 'Card Processing Fee' },
+          unit_amount: processingFeeCents,
+        },
+        quantity: 1,
+      });
+    }
+
+    const totalChargeCents = subtotalCents + (passFeeToResident ? processingFeeCents : 0);
+    // Aloha's share is always the full booking subtotal; if the resident
+    // pays the fee on top, MelyOS's cut is just that fee; if the park
+    // absorbs it instead, MelyOS's cut comes out of the subtotal itself.
+    const alohaShareCents = passFeeToResident ? subtotalCents : subtotalCents - processingFeeCents;
+    const melyOsShareCents = Math.max(totalChargeCents - alohaShareCents, 0);
+
+    const canSplit = parkSettingsRow?.stripe_connect_account_id && parkSettingsRow?.stripe_connect_onboarded;
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
       customer_email: customerEmail || undefined,
       line_items: lineItems,
+      ...(canSplit
+        ? {
+            payment_intent_data: {
+              application_fee_amount: melyOsShareCents,
+              transfer_data: { destination: parkSettingsRow.stripe_connect_account_id },
+            },
+          }
+        : {}),
       metadata: {
         lotId,
         park: 'aloha-rv-park',
