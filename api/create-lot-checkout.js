@@ -201,7 +201,6 @@ export default async function handler(req, res) {
       ? (inHighSeason ? lotRow.daily_high_season_price : lotRow.daily_low_season_price) || lotRow.daily_rate
       : lotRow.daily_rate;
 
-    const origin = req.headers.origin || `https://${req.headers.host}`;
     const lineItems = [];
 
     if (stay.isYearly) {
@@ -321,8 +320,14 @@ export default async function handler(req, res) {
         extraDays: String(stay.extraDays),
         isYearly: String(stay.isYearly),
       },
-      success_url: `${origin}/?lot_payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/?lot_payment=cancelled`,
+      // Aug 5 (per Mely): send guests back to the REAL public site's home
+      // page after paying, not this widget's own bare origin — that
+      // origin has no ?park_id= param, which trips this app's own "No
+      // Park Specified" safety guard and shows a scary error instead of
+      // a normal post-payment landing. lot_payment=success/cancelled was
+      // also never actually read/used anywhere in the frontend.
+      success_url: `https://aloharvparkfl.com/`,
+      cancel_url: `https://aloharvparkfl.com/`,
     });
 
     return res.status(200).json({ url: session.url, id: session.id });

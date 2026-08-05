@@ -524,7 +524,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
 
         <div style={{ marginBottom:16 }}>
           <label style={{ fontSize:12, fontWeight:700, color:"#374151", display:"block", marginBottom:4, fontFamily:"sans-serif" }}>
-            Your RV Length (ft)
+            Your RV Length (ft){form.departure && <span style={{ color:"#dc2626" }}> *</span>}
           </label>
           <input
             type="number"
