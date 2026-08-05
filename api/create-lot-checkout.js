@@ -269,6 +269,33 @@ export default async function handler(req, res) {
     const subtotalCents = lineItems.reduce((sum, li) => sum + li.price_data.unit_amount * li.quantity, 0);
     const processingFeeCents = Math.round(calculateProcessingFee(subtotalCents / 100) * 100);
 
+    // Aug 5 (per Mely): sales tax — one company-wide rate + mode, shared
+    // across propane/reservations/rent (varies by county, e.g. Aloha is
+    // 7.5%). "excluded" adds it as its own line item on top; "included"
+    // means the listed rate already has tax baked in (no separate line);
+    // blank/null means no mode chosen yet, so no tax is charged. The
+    // FULL tax amount always goes to Aloha (they're the one who remits
+    // it) — MelyOS never takes any share of tax, only its processing fee.
+    const { data: taxSettingsRow } = await supabase
+      .from('company_tax_settings')
+      .select('enable_tax, manual_tax_rate_percent, tax_mode')
+      .eq('company_id', companyRow?.id)
+      .maybeSingle();
+    const taxRatePercent = Number(taxSettingsRow?.manual_tax_rate_percent || 0);
+    const taxEnabled = !!taxSettingsRow?.enable_tax && taxRatePercent > 0 && taxSettingsRow?.tax_mode === 'excluded';
+    const taxCents = taxEnabled ? Math.round(subtotalCents * (taxRatePercent / 100)) : 0;
+
+    if (taxCents > 0) {
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: { name: `Sales Tax (${taxRatePercent}%)` },
+          unit_amount: taxCents,
+        },
+        quantity: 1,
+      });
+    }
+
     const { data: feeSettingsRow } = await supabase
       .from('company_fee_settings')
       .select('pass_processing_fee_to_resident')
@@ -287,11 +314,12 @@ export default async function handler(req, res) {
       });
     }
 
-    const totalChargeCents = subtotalCents + (passFeeToResident ? processingFeeCents : 0);
-    // Aloha's share is always the full booking subtotal; if the resident
-    // pays the fee on top, MelyOS's cut is just that fee; if the park
-    // absorbs it instead, MelyOS's cut comes out of the subtotal itself.
-    const alohaShareCents = passFeeToResident ? subtotalCents : subtotalCents - processingFeeCents;
+    const totalChargeCents = subtotalCents + taxCents + (passFeeToResident ? processingFeeCents : 0);
+    // Aloha's share is the full booking subtotal PLUS all of the tax
+    // (theirs to remit) — MelyOS's cut is only the processing fee, taken
+    // from the resident's payment if they're covering it, or otherwise
+    // out of the park's own subtotal.
+    const alohaShareCents = subtotalCents + taxCents + (passFeeToResident ? 0 : -processingFeeCents);
     const melyOsShareCents = Math.max(totalChargeCents - alohaShareCents, 0);
 
     const canSplit = parkSettingsRow?.stripe_connect_account_id && parkSettingsRow?.stripe_connect_onboarded;
