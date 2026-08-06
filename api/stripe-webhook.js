@@ -358,6 +358,35 @@ export default async function handler(req, res) {
     }
   }
 
+  // Aug 6 (per Mely, real gap found): the webhook was already subscribed to
+  // charge.refunded but had NO handler for it — a refunded propane or lot
+  // order stayed marked 'paid' forever, so Payments & Taxes kept counting
+  // refunded money as real revenue. Matches the refund back to its order
+  // via stripe_payment_intent (both lot_orders and propane_orders store
+  // this on the original checkout).
+  if (event.type === 'charge.refunded') {
+    const charge = event.data.object;
+    const paymentIntentId = charge.payment_intent;
+
+    if (paymentIntentId) {
+      try {
+        const { error: lotErr } = await supabase
+          .from('lot_orders')
+          .update({ status: 'refunded' })
+          .eq('stripe_payment_intent', paymentIntentId);
+        if (lotErr) console.error('Error marking lot_orders refunded:', lotErr);
+
+        const { error: propaneErr } = await supabase
+          .from('propane_orders')
+          .update({ status: 'refunded' })
+          .eq('stripe_payment_intent', paymentIntentId);
+        if (propaneErr) console.error('Error marking propane_orders refunded:', propaneErr);
+      } catch (err) {
+        console.error('Error handling charge.refunded:', err);
+      }
+    }
+  }
+
   // Manejo de pagos recurrentes de suscripciones (después del primer mes)
   if (event.type === 'invoice.payment_succeeded') {
     const invoice = event.data.object;
