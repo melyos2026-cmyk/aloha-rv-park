@@ -381,6 +381,26 @@ export default async function handler(req, res) {
           .update({ status: 'refunded' })
           .eq('stripe_payment_intent', paymentIntentId);
         if (propaneErr) console.error('Error marking propane_orders refunded:', propaneErr);
+
+        // storage_orders only stores stripe_session_id (no payment_intent
+        // column), so we need one extra lookup to find the checkout
+        // session tied to this refunded payment intent.
+        try {
+          const sessions = await stripe.checkout.sessions.list({
+            payment_intent: paymentIntentId,
+            limit: 1,
+          });
+          const matchingSessionId = sessions.data[0]?.id;
+          if (matchingSessionId) {
+            const { error: storageErr } = await supabase
+              .from('storage_orders')
+              .update({ status: 'refunded' })
+              .eq('stripe_session_id', matchingSessionId);
+            if (storageErr) console.error('Error marking storage_orders refunded:', storageErr);
+          }
+        } catch (lookupErr) {
+          console.error('Error looking up checkout session for storage refund:', lookupErr);
+        }
       } catch (err) {
         console.error('Error handling charge.refunded:', err);
       }
