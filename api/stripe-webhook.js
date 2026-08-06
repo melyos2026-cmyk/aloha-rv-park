@@ -69,7 +69,15 @@ export default async function handler(req, res) {
     const signature = req.headers['stripe-signature'];
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
+    // TEMP DIAGNOSTIC (Aug 6, remove after debugging): logging only the
+    // length/prefix of the configured secret, never the full value, to
+    // confirm Vercel actually has the right one without exposing it.
+    console.error(
+      'Webhook signature verification failed:', err.message,
+      '| webhookSecret present:', !!webhookSecret,
+      '| length:', webhookSecret ? webhookSecret.length : 0,
+      '| starts with:', webhookSecret ? webhookSecret.slice(0, 8) : 'N/A'
+    );
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
