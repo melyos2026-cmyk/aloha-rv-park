@@ -1,29 +1,64 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-const PRODUCTS = [
-  { id: '20lb', label: '20 LB Tank', price: 18, type: 'fixed' },
-  { id: '30lb', label: '30 LB Tank', price: 30, type: 'fixed' },
-  { id: '40lb', label: '40 LB Tank', price: 36, type: 'fixed' },
-  { id: 'forklift', label: 'Forklift', price: 36, type: 'fixed' },
-  { id: 'motorhome', label: 'Motor Home 40LB Tank', pricePerGallon: 4.25, type: 'variable' },
-];
+const PARK_ID = (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('park_id')) || 'aloha';
 
 export default function PropaneCheckoutModal({ lotId, onClose }) {
-  const [productId, setProductId] = useState('20lb');
+  const [products, setProducts] = useState([]);
+  const [motorhomePrice, setMotorhomePrice] = useState(null);
+  const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [gallons, setGallons] = useState('');
+  const [email, setEmail] = useState('');
+  const [lotNumber, setLotNumber] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingPrices, setLoadingPrices] = useState(true);
   const [error, setError] = useState('');
+  const [tax, setTax] = useState({ enabled: false, ratePercent: 0 });
 
-  const selected = PRODUCTS.find((p) => p.id === productId);
-  const isVariable = selected.type === 'variable';
+  useEffect(() => {
+    fetch(`/api/propane-data?type=pricing&park_id=${PARK_ID}`)
+      .then((res) => res.json())
+      .then((result) => {
+        const rawList = result.products || [];
+        const gallonProduct = rawList.find((p) => p.unit === 'gallon');
+        setMotorhomePrice(gallonProduct ? gallonProduct.price : null);
+        const list = rawList.filter((p) => p.unit !== 'gallon');
+        setProducts(list);
+        if (list.length > 0) setProductId(list[0].product_id);
+        setTax(result.tax || { enabled: false, ratePercent: 0 });
+        setLoadingPrices(false);
+      })
+      .catch(() => setLoadingPrices(false));
+  }, []);
 
-  const total = isVariable
-    ? (parseFloat(gallons) || 0) * selected.pricePerGallon
-    : selected.price * quantity;
+  const selected = products.find((p) => p.product_id === productId);
+  const isVariable = selected?.unit === 'gallon';
+
+  const subtotal = selected
+    ? isVariable
+      ? (parseFloat(gallons) || 0) * Number(selected.price)
+      : Number(selected.price) * quantity
+    : 0;
+  const taxApplies =
+    tax.enabled &&
+    !!selected &&
+    (selected.tax_mode === 'excluded'
+      ? true
+      : selected.tax_mode === 'included'
+      ? false
+      : !!selected.taxable);
+  const taxIncludedInPrice = tax.enabled && selected?.tax_mode === 'included';
+  const salesTax = taxApplies ? subtotal * (tax.ratePercent / 100) : 0;
+  const processingFee = subtotal * 0.04;
+  const total = subtotal + salesTax + processingFee;
 
   async function handleCheckout() {
     setError('');
+
+    if (!selected) {
+      setError('No propane products configured for this park.');
+      return;
+    }
 
     const qty = isVariable ? parseFloat(gallons) : quantity;
     if (!qty || qty <= 0) {
@@ -32,6 +67,10 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
     }
     if (isVariable && qty > 200) {
       setError('Cantidad de galones demasiado alta');
+      return;
+    }
+    if (!email && !lotNumber) {
+      setError('Ingresa tu email, o el número de tu lote si sos residente.');
       return;
     }
 
@@ -44,6 +83,9 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
           productId,
           quantity: qty,
           lotId,
+          parkId: PARK_ID,
+          customerEmail: email || undefined,
+          residentLot: lotNumber || undefined,
         }),
       });
 
@@ -53,7 +95,13 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
         throw new Error(data.error || 'Error al crear el pago');
       }
 
-      window.location.href = data.url;
+      // Aug 5: Stripe Checkout can't run in an iframe — redirect the top
+      // window so it actually loads instead of silently failing.
+      try {
+        window.top.location.href = data.url;
+      } catch {
+        window.location.href = data.url;
+      }
     } catch (err) {
       setError(err.message || 'Algo salió mal. Intenta de nuevo.');
       setLoading(false);
@@ -69,6 +117,14 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
         </div>
 
         <div style={styles.body}>
+          {loadingPrices ? (
+            <p style={{ fontSize: 13, color: '#666' }}>Loading prices...</p>
+          ) : (
+          <>
+          <p style={{ fontSize: 12.5, color: '#888', marginBottom: 10 }}>
+            Need a motor home fill-up (by the gallon)? {motorhomePrice ? `$${Number(motorhomePrice).toFixed(2)}/gal, ` : ''}
+            paid in person when we service you — call us at the number above or just come by.
+          </p>
           <label style={styles.label}>Producto</label>
           <select
             style={styles.select}
@@ -80,12 +136,14 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
               setError('');
             }}
           >
-            {PRODUCTS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label} — {p.type === 'fixed' ? `$${p.price}` : `$${p.pricePerGallon}/gal`}
+            {products.map((p) => (
+              <option key={p.product_id} value={p.product_id}>
+                {p.label} — {p.unit === 'gallon' ? `$${p.price}/gal` : `$${p.price}`}
               </option>
             ))}
           </select>
+          </>
+          )}
 
           {isVariable ? (
             <>
@@ -114,6 +172,37 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
             </>
           )}
 
+          <label style={styles.label}>Email (requerido)</label>
+          <input
+            type="email"
+            style={styles.input}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="tu@email.com"
+          />
+
+          <label style={styles.label}>Lote (solo residentes — opcional en vez del email)</label>
+          <input
+            style={styles.input}
+            value={lotNumber}
+            onChange={(e) => setLotNumber(e.target.value)}
+            placeholder="Ej. A12"
+          />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 4 }}>
+            <span>Subtotal{taxIncludedInPrice ? ' (incluye tax)' : ''}</span>
+            <span>${subtotal.toFixed(2)}</span>
+          </div>
+          {taxApplies && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 4 }}>
+              <span>Sales Tax ({tax.ratePercent}%)</span>
+              <span>${salesTax.toFixed(2)}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 8 }}>
+            <span>Card Processing Fee</span>
+            <span>${processingFee.toFixed(2)}</span>
+          </div>
           <div style={styles.totalRow}>
             <span>Total</span>
             <span style={styles.totalAmount}>${total.toFixed(2)}</span>

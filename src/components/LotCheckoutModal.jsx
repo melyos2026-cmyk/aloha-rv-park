@@ -56,7 +56,13 @@ export default function LotCheckoutModal({ lotId, lotInfo, onClose }) {
         throw new Error(data.error || 'Error creating payment');
       }
 
-      window.location.href = data.url;
+      // Aug 5: Stripe Checkout can't run in an iframe — redirect the top
+      // window so it actually loads instead of silently failing.
+      try {
+        window.top.location.href = data.url;
+      } catch {
+        window.location.href = data.url;
+      }
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
       setLoading(false);

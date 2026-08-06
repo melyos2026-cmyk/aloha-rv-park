@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -32,24 +33,23 @@ const PRODUCT_LABELS = {
   motorhome: 'Motor Home 40LB Tank',
 };
 
-async function updateLotStatus(lotId, newStatus) {
-  const { data: statusRow } = await supabase
-    .from('map_elements')
-    .select('data')
-    .eq('park_id', 'aloha')
-    .eq('element_type', 'statuses')
-    .eq('element_key', 'all')
+async function updateLotStatus(lotId, newStatus, parkId = 'aloha') {
+  const { data: company, error: companyErr } = await supabase
+    .from('companies')
+    .select('id')
+    .eq('park_id', parkId)
     .single();
 
-  const currentStatuses = statusRow?.data || {};
-  currentStatuses[lotId] = newStatus;
+  if (companyErr || !company) {
+    console.error('Error resolving company for park_id', parkId, companyErr);
+    return;
+  }
 
   const { error: statusError } = await supabase
-    .from('map_elements')
-    .upsert(
-      { park_id: 'aloha', element_type: 'statuses', element_key: 'all', data: currentStatuses },
-      { onConflict: 'park_id,element_type,element_key' }
-    );
+    .from('rv_lots')
+    .update({ status: newStatus })
+    .eq('company_id', company.id)
+    .eq('lot_name', lotId);
 
   if (statusError) {
     console.error('Error updating lot status:', statusError);
@@ -104,6 +104,67 @@ export default async function handler(req, res) {
 
         if (error) {
           console.error('Supabase lot order insert error:', error);
+        }
+
+        // Safety net against a race condition: the availability check only
+        // runs once, when the checkout session is first created — if two
+        // people start checkout for overlapping dates on the same lot
+        // within that window, both could complete payment. This re-checks
+        // right after payment confirms and flags it for the admin instead
+        // of silently letting a double-booking go unnoticed.
+        if (lotId && arrivalDate && departureDate && !error) {
+          try {
+            const { data: otherOrders } = await supabase
+              .from('lot_orders')
+              .select('id, arrival_date, departure_date, customer_name, customer_email')
+              .eq('lot_id', lotId)
+              .eq('status', 'paid')
+              .neq('stripe_session_id', session.id);
+
+            const newArrival = new Date(arrivalDate + 'T00:00:00');
+            const newDeparture = new Date(departureDate + 'T00:00:00');
+            const conflicting = (otherOrders || []).filter((o) => {
+              if (!o.arrival_date || !o.departure_date) return false;
+              const oStart = new Date(o.arrival_date + 'T00:00:00');
+              const oEnd = new Date(o.departure_date + 'T00:00:00');
+              return newArrival < oEnd && newDeparture > oStart;
+            });
+
+            if (conflicting.length > 0) {
+              console.error(
+                `DOUBLE-BOOKING DETECTED on lot ${lotId}: session ${session.id} overlaps with`,
+                conflicting.map((o) => o.id)
+              );
+
+              await supabase
+                .from('lot_orders')
+                .update({ has_conflict: true })
+                .eq('stripe_session_id', session.id);
+
+              const conflictIds = conflicting.map((o) => o.id);
+              await supabase
+                .from('lot_orders')
+                .update({ has_conflict: true })
+                .in('id', conflictIds);
+
+              const { data: company } = await supabase
+                .from('companies')
+                .select('id')
+                .eq('park_id', 'aloha')
+                .single();
+
+              if (company) {
+                await supabase.from('resident_update_notifications').insert({
+                  company_id: company.id,
+                  resident_name: null,
+                  update_type: 'double_booking_alert',
+                  message: `⚠️ Possible double-booking on Lot ${lotId}: two paid reservations overlap for ${arrivalDate} to ${departureDate}. Review and contact both customers.`,
+                });
+              }
+            }
+          } catch (conflictCheckErr) {
+            console.error('Error running double-booking safety check:', conflictCheckErr);
+          }
         }
 
         // Long-term stays (monthly/yearly) become residents (occupied/red).
@@ -202,9 +263,20 @@ export default async function handler(req, res) {
       }
     } else {
       // Flujo original de propano
-      const { productId, quantity, lotId, park } = session.metadata || {};
+      //
+      // ⚠️ propane_orders holds real Stripe transactions and each row's
+      // qr_token is the customer's ONLY way to redeem their tank(s) — there
+      // is no recovery path if a row is deleted. NEVER run an unconditional
+      // `DELETE FROM propane_orders` during a "clear test data" cleanup
+      // without a WHERE clause protecting real/recent purchases — this
+      // already happened once and wiped 2 real customer orders along with
+      // test data. If bulk-clearing test data, filter by a specific test
+      // email/date range instead.
+      const { productId, quantity, lotId, park, residentLot } = session.metadata || {};
 
       try {
+        const qrToken = crypto.randomBytes(16).toString('hex');
+        const customerEmail = session.customer_details?.email || null;
         const { error } = await supabase.from('propane_orders').upsert(
           {
             park_id: park || 'aloha',
@@ -215,17 +287,70 @@ export default async function handler(req, res) {
             unit: productId === 'motorhome' ? 'gallon' : 'tank',
             amount_total: (session.amount_total || 0) / 100,
             currency: session.currency || 'usd',
-            customer_email: session.customer_details?.email || null,
+            customer_email: customerEmail,
             stripe_session_id: session.id,
             stripe_payment_intent: session.payment_intent || null,
             status: 'paid',
             paid_at: new Date().toISOString(),
+            qr_token: qrToken,
+            redeemed: false,
+            resident_lot_name: residentLot || null,
           },
           { onConflict: 'stripe_session_id' }
         );
 
         if (error) {
           console.error('Supabase insert error:', error);
+        } else {
+          const { data: company } = await supabase
+            .from('companies')
+            .select('id')
+            .eq('park_id', park || 'aloha')
+            .single();
+
+          if (company) {
+            await supabase.from('resident_update_notifications').insert({
+              company_id: company.id,
+              resident_name: customerEmail || null,
+              update_type: 'propane_payment',
+              message: `Propane payment received: ${quantity} ${productId === 'motorhome' ? 'gal' : '×'} ${PRODUCT_LABELS[productId] || productId} — $${((session.amount_total || 0) / 100).toFixed(2)}.`,
+            });
+          }
+        }
+
+        if (!error && customerEmail && process.env.RESEND_API_KEY) {
+          try {
+            const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(qrToken)}`;
+            const label = PRODUCT_LABELS[productId] || productId;
+            const amount = ((session.amount_total || 0) / 100).toFixed(2);
+
+            await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                from: 'Aloha RV Park <noreply@aloharvparkfl.com>',
+                to: customerEmail,
+                subject: 'Your Propane Pickup QR Code',
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 420px; margin: 0 auto;">
+                    <h2>⛽ Payment Confirmed</h2>
+                    <p>${quantity} ${productId === 'motorhome' ? 'gallons' : '×'} ${label} — $${amount}</p>
+                    <img src="${qrImageUrl}" alt="Propane pickup QR code" style="display:block;margin:16px 0;" />
+                    <p style="font-size:13px;color:#555;">${
+                      productId === 'motorhome'
+                        ? 'Show this code to staff for your fill-up. It can only be used once.'
+                        : `Show this code to staff each time you pick up a tank — this code works once per tank purchased (${quantity} total, multiple visits OK).`
+                    } No refunds — unpicked-up tanks are not refundable.</p>
+                  </div>
+                `,
+              }),
+            });
+          } catch (emailErr) {
+            console.error('Failed to send propane QR email:', emailErr);
+          }
         }
       } catch (err) {
         console.error('Error saving propane order:', err);

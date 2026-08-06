@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import PropaneCheckoutModal from './components/PropaneCheckoutModal';
 import StorageCheckoutModal from './components/StorageCheckoutModal';
 import LotCheckoutModal from './components/LotCheckoutModal';
@@ -13,6 +14,7 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 console.log("DEBUG SUPABASE_URL:", SUPABASE_URL);
 console.log("DEBUG SUPABASE_KEY length:", SUPABASE_KEY ? SUPABASE_KEY.length : "undefined/null");
 console.log("DEBUG all env:", import.meta.env);
+const PARK_ID_PROVIDED = typeof window !== "undefined" && !!new URLSearchParams(window.location.search).get("park_id");
 const PARK_ID = (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("park_id")) || 'aloha';
 let cachedCompanyId = null;
 async function getCompanyId() {
@@ -105,7 +107,14 @@ async function saveParkSettings(settings) {
   return res.ok;
 }
 async function loadParkSettings() {
-  const res = await fetch(SUPABASE_URL + '/rest/v1/park_settings?id=eq.1', {
+  // Resolve this park's own company_id first, then load ITS park_settings
+  // row — was previously hardcoded to id=eq.1 (assumed there'd only ever
+  // be one park_settings row), which would silently read another park's
+  // settings once a 2nd company exists on the platform.
+  const companyId = await getCompanyId();
+  if (!companyId) return null;
+
+  const res = await fetch(SUPABASE_URL + '/rest/v1/park_settings?company_id=eq.' + companyId, {
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
   });
   if (!res.ok) return null;
@@ -244,15 +253,11 @@ const STATUS_SOLID = {
   for_sale:    "#ac67dd",
 };
 
-// Default mock statuses
+// Fallback statuses, only used for the instant before the real fetch
+// from rv_lots resolves (or if that fetch fails).
 function initStatuses() {
   const s = {};
-  ALL_LOTS.forEach(l => {
-    if (["B1","B2","B3","B4"].includes(l)) s[l] = "occupied";
-    else if (["B5","B6","C1","C2"].includes(l)) s[l] = "reserved";
-    else if (["D1","D2"].includes(l)) s[l] = "maintenance";
-    else s[l] = "available";
-  });
+  ALL_LOTS.forEach(l => { s[l] = "available"; });
   return s;
 }
 
@@ -263,7 +268,7 @@ function calcStayPreview(arrivalStr, departureStr, hasWeekly) {
   const totalNights = Math.round((departure - arrival) / 86400000);
 
   if (totalNights === 365) {
-    return { isYearly: true, months: 0, weeks: 0, extraDays: 0, totalNights: totalNights + 1 };
+    return { isYearly: true, months: 0, weeks: 0, extraDays: 0, totalNights };
   }
 
   let months = 0;
@@ -280,22 +285,27 @@ function calcStayPreview(arrivalStr, departureStr, hasWeekly) {
   }
   const remainingAfterMonths = Math.round((departure - cursor) / 86400000);
   const weeks = hasWeekly ? Math.floor(remainingAfterMonths / 7) : 0;
-  const leftoverExclusive = remainingAfterMonths - (weeks * 7);
-  // Both arrival and departure days are billable, so any leftover daily
-  // segment counts one extra day (e.g. 7/3 to 7/9 = 7 billable days, not 6 nights).
-  const extraDays = leftoverExclusive > 0 ? leftoverExclusive + 1 : 0;
+  // Standard checkin/checkout billing: nights = departure date - arrival
+  // date (e.g. arrive Thu 7/30 4pm, depart Sat 8/1 11am = 2 nights, not 3).
+  const extraDays = remainingAfterMonths - (weeks * 7);
 
-  return { isYearly: false, months, weeks, extraDays, totalNights: totalNights + 1 };
+  return { isYearly: false, months, weeks, extraDays, totalNights };
 }
 
-function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
-  const [form, setForm] = useState({ arrival: "", departure: "" });
+function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requiresCallOffice, onClose }) {
+  const [form, setForm] = useState({ arrival: "", departure: "", rvLength: "" });
+  const [longStay, setLongStay] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [bookedRanges, setBookedRanges] = useState([]);
   const [loadingAvailability, setLoadingAvailability] = useState(true);
-  const [allowLotBooking, setAllowLotBooking] = useState(true);
+  const [allowLotBooking, setAllowLotBooking] = useState(!lotInfo?.phone_only && !requiresCallOffice);
   const [listing, setListing] = useState(null);
+  // Only 'available' and 'reserved' (soon-vacating, known move-out date) lots
+  // can be booked here. A solid 'occupied' lot has no known availability at
+  // all — showing a booking form there would let someone pick dates with no
+  // real guarantee the lot will ever be free then.
+  const canBookStatus = status === "available" || status === "reserved";
 
   useEffect(() => {
     fetch(SUPABASE_URL + '/rest/v1/real_estate_listings?park_id=eq.' + PARK_ID + '&lot_key=eq.' + encodeURIComponent(lot) + '&available=eq.true&select=*', {
@@ -314,7 +324,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
   }, [lot]);
 
   useEffect(() => {
-    fetch('/api/get-lot-availability?lotId=' + encodeURIComponent(lot))
+    fetch('/api/lot-data?type=availability&lotId=' + encodeURIComponent(lot))
       .then(res => res.json())
       .then(data => {
         setBookedRanges(Array.isArray(data) ? data : []);
@@ -356,6 +366,20 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
   const hasOverlap = hasValidDates && rangeOverlaps(form.arrival, form.departure);
   const stay = hasValidDates && !hasOverlap ? calcStayPreview(form.arrival, form.departure, hasWeekly) : null;
 
+  const rvLengthNum = Number(form.rvLength) || 0;
+  const rvTooLong =
+    !!lotInfo?.max_length_ft && rvLengthNum > 0 && rvLengthNum > lotInfo.max_length_ft;
+
+  // Stays longer than the park's background-check threshold (admin-editable
+  // under Lease Defaults, default 15 days) — and any yearly stay — mean the
+  // guest is becoming a resident, not making a short-term reservation. Those
+  // always require the lease application (with background check), so they
+  // can't just Pay Now here.
+  const backgroundCheckThresholdDays =
+    Number(parkSettings?.lease_defaults?.background_check_threshold_days) || 15;
+  const requiresApplication =
+    longStay || (!!stay && (stay.isYearly || stay.totalNights > backgroundCheckThresholdDays));
+
   let total = 0;
   let breakdownLines = [];
   if (stay) {
@@ -375,6 +399,18 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
 
   async function handlePayNow() {
     setError("");
+    if (requiresApplication) {
+      setError(`Stays of ${backgroundCheckThresholdDays}+ days require a lease application instead.`);
+      return;
+    }
+    if (!form.rvLength) {
+      setError("Please enter your RV's length so we can confirm it fits this lot.");
+      return;
+    }
+    if (rvTooLong) {
+      setError(`This RV (${form.rvLength} ft) is too long for this lot (max ${lotInfo.max_length_ft} ft). Please choose a different lot.`);
+      return;
+    }
     if (!hasValidDates) {
       setError("Please select a valid arrival and departure date");
       return;
@@ -393,13 +429,26 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
           lotId: lot,
           arrivalDate: form.arrival,
           departureDate: form.departure,
+          rvLength: form.rvLength,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error creating payment');
 
-      window.location.href = data.url;
+      // Aug 5 (per Mely — real bug, confirmed via console: "Stripe
+      // Checkout is not able to run in an iFrame"): this widget is
+      // ALWAYS embedded via iframe (even on the "public" site), and
+      // Stripe explicitly refuses to render Checkout inside one.
+      // Redirecting window.top instead breaks out to the real top-level
+      // browser tab so Stripe actually loads. Falls back to the normal
+      // redirect if window.top is inaccessible for any reason (e.g. a
+      // stricter cross-origin sandbox) rather than silently doing nothing.
+      try {
+        window.top.location.href = data.url;
+      } catch {
+        window.location.href = data.url;
+      }
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
       setLoading(false);
@@ -447,7 +496,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
           </div>
         )}
 
-        {status !== "available" && allowLotBooking && (
+        {status === "reserved" && allowLotBooking && (
           <div style={{ display:"flex", alignItems:"center", gap:8, background:"#fffbeb", border:"1px solid #fde68a", borderRadius:8, padding:"8px 12px", marginBottom:16, fontFamily:"sans-serif" }}>
             <div style={{ width:10, height:10, borderRadius:3, background: STATUS_SOLID[status] }} />
             <span style={{ fontSize:12, color:"#92400e" }}>
@@ -456,22 +505,52 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
           </div>
         )}
 
-        {(lotInfo?.max_length || lotInfo?.amperage) && (
+        {(lotInfo?.max_length_ft || lotInfo?.amp_service) && (
           <div style={{ background:"#f9fafb", borderRadius:8, padding:"10px 12px", marginBottom:16, display:"flex", gap:16, fontFamily:"sans-serif" }}>
-            {lotInfo?.max_length && (
+            {lotInfo?.max_length_ft && (
               <div>
                 <span style={{ fontSize:11, color:"#6b7280" }}>Max RV Length: </span>
-                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.max_length}ft</span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.max_length_ft}ft</span>
               </div>
             )}
-            {lotInfo?.amperage && (
+            {lotInfo?.amp_service && (
               <div>
                 <span style={{ fontSize:11, color:"#6b7280" }}>Amperage: </span>
-                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.amperage} Amp</span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.amp_service} Amp</span>
               </div>
             )}
           </div>
         )}
+
+        <div style={{ marginBottom:16 }}>
+          <label style={{ fontSize:12, fontWeight:700, color:"#374151", display:"block", marginBottom:4, fontFamily:"sans-serif" }}>
+            Your RV Length (ft){form.departure && (
+              <span style={{
+                color: "#dc2626",
+                fontSize: 20,
+                fontWeight: 900,
+                marginLeft: 4,
+                display: "inline-block",
+                animation: "pulse-asterisk 1s ease-in-out infinite",
+              }}>
+                *
+              </span>
+            )}
+          </label>
+          <input
+            type="number"
+            min="1"
+            value={form.rvLength}
+            onChange={(e) => setForm(f => ({ ...f, rvLength: e.target.value }))}
+            placeholder="e.g. 32"
+            style={{ width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:8, border: rvTooLong ? "1px solid #dc2626" : "1px solid #ddd", fontSize:14, fontFamily:"sans-serif" }}
+          />
+          {rvTooLong && (
+            <div style={{ fontSize:12, color:"#dc2626", marginTop:4, fontFamily:"sans-serif" }}>
+              This RV ({form.rvLength} ft) is too long for this lot (max {lotInfo.max_length_ft} ft). Please choose a different lot.
+            </div>
+          )}
+        </div>
 
         {lotInfo?.description && (
           <div style={{ background:"#f0fdf4", borderRadius:8, padding:"8px 12px", marginBottom:16, fontSize:13, color:"#166534", fontFamily:"sans-serif" }}>
@@ -479,15 +558,31 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
           </div>
         )}
 
-        {!allowLotBooking && (
+        {!(allowLotBooking && canBookStatus) && (
           <div style={{ background:"#f5f3ff", border:"1px solid #ddd6fe", borderRadius:8, padding:"12px 16px", marginBottom:16, fontFamily:"sans-serif" }}>
-            <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.5 }}>
-              This lot is not available through our standard booking system. See details above or contact us for more information.
-            </p>
+            {lotInfo?.phone_only ? (
+              <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.6 }}>
+                This is a limited storage space — please call the office to check availability. Our team will confirm the space is the right size for your RV or trailer before booking.
+              </p>
+            ) : requiresCallOffice ? (
+              <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.6 }}>
+                Please call the office to check availability and pricing for this lot before booking.
+              </p>
+            ) : status === "occupied" ? (
+              <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.6 }}>
+                This lot is currently under a month-to-month lease and is not available for rent at this time. Please check back later, or take a look at our other available{" "}
+                <span style={{ display:"inline-block", width:10, height:10, borderRadius:3, background: STATUS_SOLID.available, verticalAlign:"middle", margin:"0 2px" }} /> or soon-to-be-available{" "}
+                <span style={{ display:"inline-block", width:10, height:10, borderRadius:3, background: STATUS_SOLID.reserved, verticalAlign:"middle", margin:"0 2px" }} /> lots on the map.
+              </p>
+            ) : (
+              <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.5 }}>
+                This lot is not available through our standard booking system. See details above or contact us for more information.
+              </p>
+            )}
           </div>
         )}
 
-        {allowLotBooking && (
+        {allowLotBooking && canBookStatus && (
         <>
         <div style={{ marginBottom:16 }}>
           <label style={lbl}>Rates</label>
@@ -550,12 +645,60 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
           })()}
         </div>
 
+        {(() => {
+          // For 'reserved' lots, surface the nearest actually-open date up
+          // front so the guest isn't left guessing among all the grayed-out
+          // days. If the admin manually set an "available from" date (Lot
+          // Status Control), that's the authoritative answer — use it
+          // directly instead of computing one, since a manual reservation
+          // doesn't necessarily show up in bookedRanges at all.
+          if (status !== "reserved" || loadingAvailability) return null;
+          let candidate;
+          if (reservedUntil) {
+            candidate = new Date(reservedUntil + "T00:00:00");
+          } else {
+            candidate = new Date();
+            candidate.setHours(0, 0, 0, 0);
+            let changed = true;
+            while (changed) {
+              changed = false;
+              for (const r of bookedRanges) {
+                const start = new Date(r.arrival_date + "T00:00:00");
+                const end = new Date(r.departure_date + "T00:00:00");
+                if (candidate >= start && candidate < end) {
+                  candidate = new Date(end);
+                  changed = true;
+                }
+              }
+            }
+          }
+          const label = candidate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+          const isoDate = candidate.toISOString().split("T")[0];
+          return (
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"10px 12px", marginBottom:12, fontFamily:"sans-serif" }}>
+              <span style={{ fontSize:12.5, color:"#166534" }}>
+                Next available date: <strong>{label}, 4:00 PM</strong> (check-out time)
+              </span>
+              <button
+                type="button"
+                onClick={() => setForm(prev => ({ ...prev, arrival: isoDate }))}
+                style={{ fontSize:11.5, fontWeight:700, color:"#166534", background:"#dcfce7", border:"1px solid #86efac", borderRadius:6, padding:"5px 10px", cursor:"pointer", whiteSpace:"nowrap" }}
+              >
+                Use this date
+              </button>
+            </div>
+          );
+        })()}
+
         <div style={row2}>
           <div>
             <label style={lbl}>Arrival</label>
             <DatePicker
               selected={form.arrival ? new Date(form.arrival + "T00:00:00") : null}
-              onChange={(date) => setForm({...form, arrival: date ? date.toISOString().split("T")[0] : ""})}
+              onChange={(date) => {
+                setLongStay(false);
+                setForm({...form, arrival: date ? date.toISOString().split("T")[0] : "", departure: ""});
+              }}
               minDate={new Date()}
               excludeDateIntervals={excludeDateIntervals}
               dateFormat="MM/dd/yyyy"
@@ -564,11 +707,21 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
               className="lot-date-input"
             />
           </div>
+          {!longStay && (
           <div>
             <label style={lbl}>Departure</label>
             <DatePicker
               selected={form.departure ? new Date(form.departure + "T00:00:00") : null}
-              onChange={(date) => setForm({...form, departure: date ? date.toISOString().split("T")[0] : ""})}
+              onChange={(date) => {
+                const newDeparture = date ? date.toISOString().split("T")[0] : "";
+                const tentative = newDeparture && form.arrival ? calcStayPreview(form.arrival, newDeparture, hasWeekly) : null;
+                if (tentative && !tentative.isYearly && tentative.totalNights > 32) {
+                  setLongStay(true);
+                  setForm({...form, departure: ""});
+                  return;
+                }
+                setForm({...form, departure: newDeparture});
+              }}
               minDate={form.arrival ? new Date(form.arrival + "T00:00:00") : new Date()}
               excludeDateIntervals={excludeDateIntervalsForDeparture}
               dateFormat="MM/dd/yyyy"
@@ -577,7 +730,17 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
               className="lot-date-input"
             />
           </div>
+          )}
         </div>
+
+        {longStay && (
+          <div style={{ fontSize:12, color:"#6b7280", marginBottom:12, fontFamily:"sans-serif" }}>
+            Not sure how long you're staying yet? That's fine — you'll set your move-out date (if you know it) in the lease application.{" "}
+            <button type="button" onClick={()=>setLongStay(false)} style={{ background:"none", border:"none", padding:0, color:"#16a34a", textDecoration:"underline", cursor:"pointer", fontSize:12 }}>
+              Pick a departure date instead
+            </button>
+          </div>
+        )}
 
         {hasOverlap && (
           <div style={{ background:"#fef2f2", color:"#dc2626", padding:"8px 10px", borderRadius:8, fontSize:13, marginBottom:12, fontFamily:"sans-serif" }}>
@@ -585,7 +748,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
           </div>
         )}
 
-        {stay && (
+        {stay && !requiresApplication && (
           <div style={{ background:"#f0fdf4", borderRadius:8, padding:"10px 14px", marginBottom:16, fontFamily:"sans-serif", fontSize:14 }}>
             {breakdownLines.map((line,i) => (
               <div key={i} style={{ marginBottom:4, color:"#374151" }}>{line}</div>
@@ -594,6 +757,13 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
               <span style={{ fontWeight:600 }}>Total</span>
               <strong style={{ color:"#16a34a", fontSize:18 }}>${total.toLocaleString()}</strong>
             </div>
+          </div>
+        )}
+
+        {requiresApplication && !!lotInfo?.price_monthly && (
+          <div style={{ background:"#f0fdf4", borderRadius:8, padding:"10px 14px", marginBottom:16, fontFamily:"sans-serif", fontSize:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <span style={{ color:"#374151" }}>Rent</span>
+            <strong style={{ color:"#16a34a", fontSize:18 }}>${lotInfo.price_monthly.toLocaleString()}/month</strong>
           </div>
         )}
 
@@ -609,9 +779,27 @@ function BookingModal({ lot, status, lotInfo, parkSettings, onClose }) {
           Free cancellation up to {parkSettings?.cancellation_days ?? 7} day(s) before arrival.
         </div>
 
-        <button onClick={handlePayNow} disabled={loading || !hasValidDates || hasOverlap} style={{ display:"block", width:"100%", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", border:"none", cursor: loading || !hasValidDates || hasOverlap ? "default" : "pointer", opacity: loading || !hasValidDates || hasOverlap ? 0.6 : 1, boxShadow:"0 4px 12px rgba(22,163,74,0.3)" }}>
-          {loading ? "Processing..." : "Pay Now"}
-        </button>
+        {requiresApplication ? (
+          <div>
+            <div style={{ background:"#f5f3ff", border:"1px solid #ddd6fe", borderRadius:8, padding:"12px 14px", marginBottom:12, fontFamily:"sans-serif" }}>
+              <p style={{ fontSize:13, color:"#5b21b6", margin:0, lineHeight:1.5 }}>
+                Stays of {backgroundCheckThresholdDays}+ days make you a resident, not just a
+                reservation — please complete a lease application (including a background check).
+              </p>
+            </div>
+            <a
+              href="https://aloharvparkfl.com/apply"
+              target="_top"
+              style={{ display:"block", width:"100%", boxSizing:"border-box", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", textDecoration:"none", boxShadow:"0 4px 12px rgba(22,163,74,0.3)" }}
+            >
+              Go to Lease Application
+            </a>
+          </div>
+        ) : (
+          <button onClick={handlePayNow} disabled={loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength} style={{ display:"block", width:"100%", background: (loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength) ? "#9ca3af" : "linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", border:"none", cursor: loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength ? "default" : "pointer", boxShadow: (loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength) ? "none" : "0 4px 12px rgba(22,163,74,0.3)" }}>
+            {loading ? "Processing..." : "Pay Now"}
+          </button>
+        )}
         </>
         )}
       </div>
@@ -633,7 +821,7 @@ function MyReservationsModal({ parkSettings, onClose }) {
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/get-my-bookings?email=' + encodeURIComponent(email));
+      const res = await fetch('/api/lot-data?type=my-bookings&email=' + encodeURIComponent(email));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not fetch bookings');
       setBookings(data);
@@ -742,17 +930,51 @@ const emojiHoverStyle = `
   transform: scale(1.25);
   filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.9));
 }
+.map-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.map-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, auto));
+  gap: 12px 28px;
+}
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+@media (max-width: 620px) {
+  .map-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .map-legend {
+    grid-template-columns: repeat(2, 1fr);
+    width: 100%;
+    gap: 12px 16px;
+  }
+}
 `;
 
 export default function AlohaMap() {
   const [statuses, setStatuses] = useState(initStatuses);
+  const [bookingDisabled, setBookingDisabled] = useState({});
+  const [reservedDates, setReservedDates] = useState({});
   const [hover, setHover] = useState(null);
   const [selected, setSelected] = useState(null);
   const [selectedStorageLot, setSelectedStorageLot] = useState(null);
   const [payLotSelected, setPayLotSelected] = useState(null);
   const [confirmed, setConfirmed] = useState(null);
   const containerRef = useRef(null);
+  const [previewWidth, setPreviewWidth] = useState(null); // null = actual device width; 900/390 = forced preview
+  const [zoomLevel, setZoomLevel] = useState(1);
   const [scale, setScale] = useState({ w: 900, h: 1130 });
+  const scaleFactor = (scale.w || 900) / 900;
   const [draftLots, setDraftLots] = useState(LOTS);
   const [activeEditLot, setActiveEditLot] = useState(null);
   const [snapLines, setSnapLines] = useState({ x: null, y: null });
@@ -770,12 +992,86 @@ export default function AlohaMap() {
   const [lotShapes, setLotShapes] = useState({});
   const [dragging, setDragging] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const isAdmin = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "true";
+  const [editorRole, setEditorRole] = useState(null); // null | 'master_admin' | 'park_admin'
+  // master_admin: full editor (move/resize lots, everything below).
+  // park_admin: restricted — can only manage emoji (add/edit info/delete)
+  // and change a lot's color, never move/resize lots or edit their info/price.
+  const isAdmin = editorRole === "master_admin";
+  const canEditMap = editorRole === "master_admin" || editorRole === "park_admin";
+  const isRestrictedEditor = editorRole === "park_admin";
   const isInfoOnly = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "info";
   const [editMode, setEditMode] = useState(false);
   const [activeEmoji, setActiveEmoji] = useState(null);
   const [propaneModalLotId, setPropaneModalLotId] = useState(null);
+  const [propaneReceipt, setPropaneReceipt] = useState(null);
   const [storageModalOpen, setStorageModalOpen] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const editRequested = params.get("edit") === "true";
+    const token = params.get("token");
+    if (!editRequested || !token) {
+      setEditorRole(null);
+      return;
+    }
+    fetch(`/api/verify-edit-token?park_id=${PARK_ID}&token=${encodeURIComponent(token)}`)
+      .then((res) => res.json())
+      .then((result) => setEditorRole(result.valid ? result.role : null))
+      .catch(() => setEditorRole(null));
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("propane_payment") !== "success") return;
+    const sessionId = params.get("session_id");
+    if (!sessionId) return;
+
+    let attempts = 0;
+    function fetchOrder() {
+      fetch(`/api/propane-data?type=order&session_id=${encodeURIComponent(sessionId)}`)
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.order) {
+            setPropaneReceipt(result.order);
+          } else if (attempts < 5) {
+            // the Stripe webhook can take a couple seconds to land
+            attempts += 1;
+            setTimeout(fetchOrder, 1500);
+          }
+        })
+        .catch(() => {});
+    }
+    fetchOrder();
+    // Clean the URL so refreshing doesn't re-trigger this
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
+
+  useEffect(() => {
+    if (window.self === window.top) return; // not embedded in an iframe, nothing to report
+
+    function reportHeight() {
+      const height = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+      window.parent.postMessage({ type: "aloha-map-height", height }, "*");
+    }
+
+    reportHeight();
+    const observer = new ResizeObserver(reportHeight);
+    observer.observe(document.body);
+    window.addEventListener("load", reportHeight);
+
+    // Safety net: async data (lot statuses, images) can change height without a resize
+    // event always firing in time — re-check for the first few seconds after mount.
+    const interval = setInterval(reportHeight, 500);
+    const stopSafetyNet = setTimeout(() => clearInterval(interval), 8000);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("load", reportHeight);
+      clearInterval(interval);
+      clearTimeout(stopSafetyNet);
+    };
+  }, []);
 
   useEffect(() => {
     const update = () => {
@@ -787,14 +1083,13 @@ export default function AlohaMap() {
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, []);
+  }, [previewWidth]);
 
   useEffect(() => {
     async function loadData() {
-      const [emojiRows, shapeRows, statusRows, textRows, colorRows, rotRows, emojiRotRows, textRotRows] = await Promise.all([
+      const [emojiRows, shapeRows, textRows, colorRows, rotRows, emojiRotRows, textRotRows] = await Promise.all([
         loadFromSupabase('emojis'),
         loadFromSupabase('shapes'),
-        loadFromSupabase('statuses'),
         loadFromSupabase('texts'),
         loadFromSupabase('lotColors'),
         loadFromSupabase('rotations'),
@@ -803,13 +1098,50 @@ export default function AlohaMap() {
       ]);
       if (emojiRows.length > 0) setEmojis(emojiRows[0].data || []);
       if (shapeRows.length > 0) setLotShapes(shapeRows[0].data || {});
-      if (statusRows.length > 0) setStatuses(statusRows[0].data || {});
       if (textRows.length > 0) setTexts(textRows[0].data || []);
       if (colorRows.length > 0) setLotColors(colorRows[0].data || {});
       if (rotRows.length > 0) setRotations(rotRows[0].data || {});
       if (emojiRotRows.length > 0) setEmojiRotations(emojiRotRows[0].data || {});
       if (textRotRows.length > 0) setTextRotations(textRotRows[0].data || {});
+      // Real, live lot statuses — rv_lots.status is the single source of
+      // truth shared with the lease application / reservation systems, not
+      // the old disconnected map_elements "statuses" blob.
+      try {
+        const statusRes = await fetch('/api/lot-data?type=statuses&park_id=' + PARK_ID);
+        if (statusRes.ok) {
+          const { statuses: liveStatusMap, bookingDisabled: liveBookingDisabled } = await statusRes.json();
+          setStatuses(prev => ({ ...prev, ...(liveStatusMap || {}) }));
+          setBookingDisabled(liveBookingDisabled || {});
+        }
+      } catch (err) {
+        console.error('Error loading live lot statuses:', err);
+      }
+      try {
+        const reservedRes = await fetch('/api/lot-data?type=reserved-dates&park_id=' + PARK_ID);
+        if (reservedRes.ok) {
+          setReservedDates(await reservedRes.json());
+        }
+      } catch (err) {
+        console.error('Error loading lot reserved-until dates:', err);
+      }
       const info = await loadLotInfo(PARK_ID);
+      // Real, live pricing — rv_lots.daily_rate/weekly_rate/high_season_price/
+      // low_season_price is the single source of truth shared with the
+      // admin's "Lots & Seasonal Pricing" screen, not the old disconnected
+      // lot_info price_daily/price_monthly/price_weekly fields. Only
+      // price_yearly (rarely used, no rv_lots equivalent) still comes from
+      // lot_info's own manual entry.
+      try {
+        const pricingRes = await fetch('/api/lot-data?type=pricing&park_id=' + PARK_ID);
+        if (pricingRes.ok) {
+          const livePricing = await pricingRes.json();
+          Object.keys(livePricing).forEach((lotName) => {
+            info[lotName] = { ...(info[lotName] || {}), ...livePricing[lotName] };
+          });
+        }
+      } catch (err) {
+        console.error('Error loading live lot pricing:', err);
+      }
       setLotInfo(info);
       const settings = await loadParkSettings();
       if (settings) setParkSettings(settings);
@@ -850,6 +1182,18 @@ export default function AlohaMap() {
 
   const counts = Object.values(statuses).reduce((acc, s) => { acc[s] = (acc[s]||0)+1; return acc; }, {});
 
+  if (!PARK_ID_PROVIDED) {
+    return (
+      <div style={{ minHeight:"100vh", background:"#f9fafb", display:"flex", alignItems:"center", justifyContent:"center", padding:20, fontFamily:"sans-serif" }}>
+        <div style={{ background:"#fff", borderRadius:16, padding:40, maxWidth:440, width:"100%", textAlign:"center", boxShadow:"0 10px 40px rgba(0,0,0,0.1)" }}>
+          <div style={{ fontSize:48, marginBottom:12 }}>⚠️</div>
+          <h1 style={{ fontSize:20, fontWeight:800, color:"#374151", marginBottom:8 }}>No Park Specified</h1>
+          <p style={{ fontSize:14, color:"#6b7280" }}>This map link is missing its park identifier and cannot be displayed. Please contact support instead of assuming any particular property's data.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (confirmed) {
     return (
       <div style={{ minHeight:"100vh", background:"#f0fdf4", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
@@ -874,19 +1218,19 @@ export default function AlohaMap() {
   }
 
   return (
-    <div style={{ minHeight:"100vh", background:"#f0fdf4", fontFamily:"sans-serif" }}>
+    <div style={{ minHeight: window.self === window.top ? "100vh" : "auto", background:"#f0fdf4", fontFamily:"sans-serif" }}>
       <style>{emojiHoverStyle}</style>
       {/* Header */}
-      <div style={{ background:"linear-gradient(135deg,#14532d,#16a34a)", padding:"16px 24px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+      <div className="map-header" style={{ background:"linear-gradient(135deg,#14532d,#16a34a)", padding:"24px" }}>
         <div>
           <div style={{ fontFamily:"Georgia,serif", fontWeight:900, fontSize:22, color:"#fff" }}>🌺 Aloha RV Park</div>
-          <div style={{ fontSize:12, color:"rgba(255,255,255,0.8)", letterSpacing:1 }}>INTERACTIVE LOT MAP · KISSIMMEE, FL</div>
+          <div style={{ fontSize:12, color:"rgba(255,255,255,0.8)", letterSpacing:1, marginTop:4 }}>INTERACTIVE LOT MAP · KISSIMMEE, FL</div>
         </div>
-        <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+        <div className="map-legend">
           {Object.entries(STATUS_COLORS).map(([s,c]) => (
-            <div key={s} style={{ display:"flex", alignItems:"center", gap:5 }}>
-              <div style={{ width:12, height:12, borderRadius:3, background:STATUS_SOLID[s] }} />
-              <span style={{ color:"#fff", fontSize:11, textTransform:"capitalize", fontWeight:600 }}>{s.replace(/_/g," ")} ({counts[s]||0})</span>
+            <div key={s} className="map-legend-item">
+              <div style={{ width:14, height:14, borderRadius:4, background:STATUS_SOLID[s], flexShrink:0 }} />
+              <span style={{ color:"#fff", fontSize:13, textTransform:"capitalize", fontWeight:600 }}>{s.replace(/_/g," ")} ({counts[s]||0})</span>
             </div>
           ))}
         </div>
@@ -894,15 +1238,49 @@ export default function AlohaMap() {
 
       <div style={{ padding:"16px 16px 0", textAlign:"center" }}>
         <p style={{ color:"#166534", fontWeight:600, margin:0, fontSize:14 }}>
-          Click any <span style={{ color:"#16a34a" }}>🟢 green lot</span> to reserve it. Hover to see the lot number.
+          Click any <span style={{ color:"#16a34a" }}>🟢 green</span> or <span style={{ color:"#ca8a04" }}>🟡 orange</span> lot to check availability and reserve it. Hover to see the lot number.
         </p>
       </div>
 
+      {canEditMap && editMode && (
+        <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", alignItems:"center", gap:8, padding:"12px 16px 0" }}>
+          <button
+            onClick={() => setPreviewWidth(null)}
+            style={{ background: previewWidth === null ? "#166534" : "#e5e7eb", color: previewWidth === null ? "#fff" : "#374151", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}
+          >
+            📐 Auto (This Screen)
+          </button>
+          <button
+            onClick={() => setPreviewWidth(900)}
+            style={{ background: previewWidth === 900 ? "#166534" : "#e5e7eb", color: previewWidth === 900 ? "#fff" : "#374151", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}
+          >
+            💻 Desktop View
+          </button>
+          <button
+            onClick={() => setPreviewWidth(390)}
+            style={{ background: previewWidth === 390 ? "#166534" : "#e5e7eb", color: previewWidth === 390 ? "#fff" : "#374151", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}
+          >
+            📱 Mobile View
+          </button>
+          <div style={{ display:"flex", alignItems:"center", gap:6, background:"#e5e7eb", borderRadius:8, padding:"4px 6px", marginLeft:8 }}>
+            <button
+              onClick={() => setZoomLevel(z => Math.max(1, Math.round((z - 0.25) * 100) / 100))}
+              style={{ background:"#fff", border:"none", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:16, fontWeight:700, color:"#374151" }}
+            >－</button>
+            <span style={{ fontSize:12, fontWeight:700, color:"#374151", minWidth:40, textAlign:"center" }}>{Math.round(zoomLevel * 100)}%</span>
+            <button
+              onClick={() => setZoomLevel(z => Math.min(2.5, Math.round((z + 0.25) * 100) / 100))}
+              style={{ background:"#fff", border:"none", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:16, fontWeight:700, color:"#374151" }}
+            >＋</button>
+          </div>
+        </div>
+      )}
+
       {/* Map Container */}
-      <div style={{ padding:16, display:"flex", justifyContent:"center" }}>
+      <div style={{ padding:16, display:"flex", justifyContent:"center", zoom: zoomLevel }}>
         <div
           ref={containerRef}
-          style={{ position:"relative", width:"100%", maxWidth:900, display:"inline-block", userSelect:"none" }}
+          style={{ position:"relative", width:"100%", maxWidth:previewWidth || 900, display:"inline-block", userSelect:"none", ...(previewWidth ? { border:"3px solid #166534", borderRadius:12, boxShadow:"0 4px 20px rgba(0,0,0,0.15)" } : {}) }}
           onClick={() => setActiveEmoji(null)}
           onMouseMove={editMode ? (e) => {
             if (!dragging) return;
@@ -950,7 +1328,7 @@ export default function AlohaMap() {
             const py = y / 100 * mapH;
             const pw = w / 100 * mapW;
             const ph = h / 100 * mapH;
-            if (editMode) {
+            if (editMode && isAdmin) {
               return (
                 <Rnd
                   key={lot}
@@ -993,6 +1371,31 @@ export default function AlohaMap() {
                 </Rnd>
               );
             }
+            if (editMode && isRestrictedEditor) {
+              // park_admin: can change this lot's status/color/info, but never move/resize it.
+              return (
+                <div
+                  key={lot}
+                  onClick={() => setActiveEditLot(lot)}
+                  style={{
+                    position:"absolute",
+                    left:`${x}%`, top:`${y}%`,
+                    width:`${w}%`, height:`${h}%`,
+                    background: lotColors[lot] ? lotColors[lot] : STATUS_COLORS[status],
+                    borderRadius: borderRadius,
+                    clipPath: clipPath,
+                    border: activeEditLot === lot ? "2px solid #f59e0b" : "1.5px dashed rgba(255,255,255,0.8)",
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    cursor:"pointer",
+                    boxSizing:"border-box",
+                    zIndex: activeEditLot === lot ? 50 : 10,
+                    transform: `rotate(${rotations[lot] || 0}deg)`,
+                  }}
+                >
+                  <span style={{ fontSize:"clamp(5px,0.85vw,10px)", fontWeight:700, color:"#fff", textShadow:"0 1px 3px rgba(0,0,0,0.8)", pointerEvents:"none" }}>{lot}</span>
+                </div>
+              );
+            }
             return (
               <div
                 key={lot}
@@ -1029,11 +1432,13 @@ export default function AlohaMap() {
             );
           })}
           {/* Texts */}
-          {texts.map((item) => (
+          {texts.map((item) => {
+            const textSize = item.size * scaleFactor;
+            return (
             <Rnd
               key={item.id}
               position={{ x: item.x / 100 * (scale.w || 900), y: item.y / 100 * (scale.h || 1130) }}
-              size={{ width: item.text.length * item.size * 0.6 + 20, height: item.size + 16 }}
+              size={{ width: item.text.length * textSize * 0.6 + 20 * scaleFactor, height: textSize + 16 * scaleFactor }}
               onDragStop={(e, d) => {
                 const nx = Math.round(d.x / (scale.w || 900) * 1000) / 10;
                 const ny = Math.round(d.y / (scale.h || 1130) * 1000) / 10;
@@ -1042,7 +1447,7 @@ export default function AlohaMap() {
               enableResizing={false}
               style={{ zIndex:200, cursor:"move" }}
             >
-              <div style={{ fontSize:item.size, color:item.color, fontWeight:700, textShadow:"0 1px 3px rgba(0,0,0,0.5)", whiteSpace:"nowrap", userSelect:"none" }}>
+              <div style={{ fontSize:textSize, color:item.color, fontWeight:700, textShadow:"0 1px 3px rgba(0,0,0,0.5)", whiteSpace:"nowrap", userSelect:"none" }}>
                 {item.text}
                 {editMode && (
                   <button onClick={()=>setTexts(prev=>prev.filter(t=>t.id!==item.id))}
@@ -1050,15 +1455,16 @@ export default function AlohaMap() {
                 )}
               </div>
             </Rnd>
-          ))}
+          );})}
           {/* Emojis */}
           {emojis.map((item) => {
-            const emojiSize = item.size || 24;
+            const rawSize = item.size || 24;
+            const emojiSize = rawSize * scaleFactor;
             return (
             <Rnd
               key={item.id}
               position={{ x: item.x / 100 * (scale.w || 900), y: item.y / 100 * (scale.h || 1130) }}
-              size={{ width: emojiSize + 8, height: emojiSize + 8 }}
+              size={{ width: emojiSize + 8 * scaleFactor, height: emojiSize + 8 * scaleFactor }}
               onDragStop={(e, d) => {
                 const nx = Math.round(d.x / (scale.w || 900) * 1000) / 10;
                 const ny = Math.round(d.y / (scale.h || 1130) * 1000) / 10;
@@ -1091,9 +1497,9 @@ export default function AlohaMap() {
                     rows={3}
                     style={{ width:"100%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, marginBottom:6, boxSizing:"border-box", resize:"vertical" }}
                   />
-                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>SIZE: {emojiSize}px</div>
+                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>SIZE: {rawSize}px</div>
                   <input
-                    type="range" min="12" max="80" value={emojiSize}
+                    type="range" min="12" max="80" value={rawSize}
                     onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, size: parseInt(e.target.value) } : em))}
                     style={{ width:"100%", marginBottom:8 }}
                   />
@@ -1104,7 +1510,7 @@ export default function AlohaMap() {
                 </div>
               )}
 
-              {!editMode && !isInfoOnly && activeEmoji === item.id && (item.label || item.info) && (
+              {!editMode && !isInfoOnly && activeEmoji === item.id && (item.label || item.info) && createPortal(
                 <div onClick={()=>setActiveEmoji(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1999, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
                   <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:20, padding:"24px 28px", minWidth:280, maxWidth:360, width:"100%", boxShadow:"0 24px 64px rgba(0,0,0,0.4)", fontFamily:"sans-serif", position:"relative" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
@@ -1140,7 +1546,7 @@ export default function AlohaMap() {
                     </div>
                   </div>
                 </div>
-              )}
+              , document.body)}
 
                             {/* no tooltip - title only shows in popup */}
             </Rnd>
@@ -1152,6 +1558,30 @@ export default function AlohaMap() {
 
       {propaneModalLotId && (
         <PropaneCheckoutModal lotId={propaneModalLotId} onClose={()=>setPropaneModalLotId(null)} />
+      )}
+      {propaneReceipt && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:4000 }}>
+          <div style={{ background:"#fff", borderRadius:16, padding:28, width:320, maxWidth:"90vw", textAlign:"center", fontFamily:"sans-serif" }}>
+            <h3 style={{ margin:"0 0 4px 0", fontSize:18 }}>✅ Payment Confirmed</h3>
+            <p style={{ color:"#555", fontSize:13.5, margin:"0 0 16px 0" }}>
+              {propaneReceipt.quantity} {propaneReceipt.unit === "gallon" ? "gallons" : "×"} {propaneReceipt.product_label} — ${Number(propaneReceipt.amount_total).toFixed(2)}
+            </p>
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(propaneReceipt.qr_token)}`}
+              alt="Propane pickup QR code"
+              style={{ width:220, height:220, margin:"0 auto 16px auto", display:"block" }}
+            />
+            <p style={{ fontSize:12.5, color:"#777", marginBottom:20 }}>
+              {propaneReceipt.unit === "gallon"
+                ? "Show this code to staff for your fill-up. It can only be used once."
+                : `Show this code to staff each time you pick up a tank — this code works once per tank purchased${propaneReceipt.quantity > 1 ? ` (${propaneReceipt.quantity} total, multiple visits OK)` : ""}.`}{" "}
+              No refunds — unpicked-up tanks are not refundable.
+            </p>
+            <button onClick={() => setPropaneReceipt(null)} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"10px 24px", borderRadius:8, fontWeight:700, fontSize:14, cursor:"pointer" }}>
+              Done
+            </button>
+          </div>
+        </div>
       )}
       {selectedStorageLot && (
         <StorageCheckoutModal
@@ -1175,7 +1605,7 @@ export default function AlohaMap() {
             ⚙️ Park Settings
           </button>
         )}
-        {isAdmin && (
+        {canEditMap && (
           <button
             onClick={() => { setEditMode(m => !m); setActiveEmoji(null); }}
             style={{ background: editMode ? "#f59e0b" : "#16a34a", color:"#fff", border:"none", padding:"8px 20px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700, boxShadow:"0 2px 6px rgba(0,0,0,0.15)" }}
@@ -1260,7 +1690,8 @@ export default function AlohaMap() {
       {editMode && (
         <div style={{ maxWidth:900, margin:"0 auto 20px", background:"#fff", border:"2px solid #f59e0b", borderRadius:14, padding:16, fontFamily:"sans-serif" }}>
           
-          {/* Add Lot */}
+          {/* Add Lot — master only */}
+          {isAdmin && (
           <div style={{ marginBottom:14, padding:12, background:"#f0fdf4", borderRadius:10 }}>
             <strong style={{ fontSize:13, color:"#166534" }}>+ Add New Lot</strong>
 
@@ -1275,6 +1706,7 @@ export default function AlohaMap() {
               }} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontWeight:600 }}>Add</button>
             </div>
           </div>
+          )}
 
           {/* Add Emojis */}
           <div style={{ marginBottom:14, padding:12, background:"#fef9c3", borderRadius:10 }}>
@@ -1298,7 +1730,8 @@ export default function AlohaMap() {
             </div>
           </div>
 
-          {/* Add Text */}
+          {/* Add Text — master only */}
+          {isAdmin && (
           <div style={{ marginBottom:14, padding:12, background:"#eff6ff", borderRadius:10 }}>
             <strong style={{ fontSize:13, color:"#1e40af" }}>Add Text to Map</strong>
             <div style={{ display:"flex", gap:8, marginTop:8 }}>
@@ -1315,18 +1748,21 @@ export default function AlohaMap() {
               }} style={{ background:"#1e40af", color:"#fff", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontWeight:600 }}>Add</button>
             </div>
           </div>
+          )}
 
-          {activeEditLot && draftLots[activeEditLot] && (
+          {canEditMap && activeEditLot && draftLots[activeEditLot] && (
             <>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
                 <strong style={{ fontSize:15 }}>Editing: <span style={{ color:"#16a34a" }}>{activeEditLot}</span></strong>
                 <div style={{ display:"flex", gap:8 }}>
+                  {isAdmin && (
                   <button onClick={()=>{
                     if (window.confirm(`Delete lot ${activeEditLot}?`)) {
                       setDraftLots(prev=>{ const n={...prev}; delete n[activeEditLot]; return n; });
                       setActiveEditLot(null);
                     }
                   }} style={{ background:"#ef4444", color:"#fff", border:"none", padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Delete</button>
+                  )}
                   <button onClick={()=>setActiveEditLot(null)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer", color:"#888" }}>✕</button>
                 </div>
               </div>
@@ -1334,7 +1770,23 @@ export default function AlohaMap() {
                 <span style={{ fontSize:12, fontWeight:600, color:"#6b7280" }}>STATUS / COLOR</span>
                 <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
                   {[["available","#16a34a","🟢 Available"],["occupied","#dc2626","🔴 Occupied"],["reserved","#ca8a04","🟡 Reserved"],["maintenance","#4b5563","⚫ Maintenance"],["for_sale","#ac67dd","🏠 For Sale"]].map(([s,c,label])=>(
-                    <button key={s} onClick={()=>{ setStatuses(prev=>({...prev,[activeEditLot]:s})); if (s === "for_sale") ensureRealEstateListing(activeEditLot); }}
+                    <button key={s} onClick={async ()=>{
+                      setStatuses(prev=>({...prev,[activeEditLot]:s}));
+                      if (s === "for_sale") ensureRealEstateListing(activeEditLot);
+                      // Write straight to rv_lots (the single source of truth
+                      // shared with lease applications/reservations) so this
+                      // manual change is immediately reflected everywhere,
+                      // not just on this map.
+                      try {
+                        await fetch('/api/set-lot-status', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ lotName: activeEditLot, status: s, parkId: PARK_ID }),
+                        });
+                      } catch (err) {
+                        console.error('Error saving lot status:', err);
+                      }
+                    }}
                       style={{ background: statuses[activeEditLot]===s ? c : "#f3f4f6", color: statuses[activeEditLot]===s ? "#fff" : "#374151", border:`2px solid ${c}`, padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600 }}>
                       {label}
                     </button>
@@ -1352,6 +1804,7 @@ export default function AlohaMap() {
                     style={{ background:"#f3f4f6", border:"1px solid #d1d5db", padding:"4px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Reset</button>
                 </div>
               </div>
+              {isAdmin && (
               <div style={{ marginBottom:10 }}>
                 <span style={{ fontSize:12, fontWeight:600, color:"#6b7280" }}>ROTATION</span>
                 <div style={{ display:"flex", gap:8, marginTop:6, alignItems:"center" }}>
@@ -1363,6 +1816,8 @@ export default function AlohaMap() {
                     style={{ background:"#f3f4f6", border:"1px solid #d1d5db", padding:"4px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Reset</button>
                 </div>
               </div>
+              )}
+              {isAdmin && (
               <div style={{ marginBottom:10 }}>
                 <span style={{ fontSize:12, fontWeight:600, color:"#6b7280" }}>SHAPE</span>
                 <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
@@ -1374,6 +1829,7 @@ export default function AlohaMap() {
                   ))}
                 </div>
               </div>
+              )}
               <div style={{ marginBottom:12, background:"#f0fdf4", borderRadius:10, padding:12 }}>
                 <strong style={{ fontSize:13, color:"#166534" }}>Lot Details (visible to guests)</strong>
                 {activeEditLot.startsWith("S") ? (
@@ -1463,18 +1919,18 @@ export default function AlohaMap() {
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:8 }}>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max RV Length (ft)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.max_length || 45}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_length:parseInt(e.target.value)}}))}
+                        <input type="number" defaultValue={lotInfo[activeEditLot]?.max_length_ft || lotInfo[activeEditLot]?.max_length || 45}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_length_ft:parseInt(e.target.value)}}))}
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Amperage</label>
-                        <select defaultValue={lotInfo[activeEditLot]?.amperage || 50}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], amperage:parseInt(e.target.value)}}))}
+                        <select defaultValue={lotInfo[activeEditLot]?.amp_service || String(lotInfo[activeEditLot]?.amperage || 50)}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], amp_service:e.target.value}}))}
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
-                          <option value={30}>30 Amp</option>
-                          <option value={50}>50 Amp</option>
-                          <option value={30.50}>30/50 Amp</option>
+                          <option value="30">30 Amp</option>
+                          <option value="50">50 Amp</option>
+                          <option value="30/50">30/50 Amp</option>
                         </select>
                       </div>
                       <div>
@@ -1484,9 +1940,24 @@ export default function AlohaMap() {
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Monthly Price ($)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.price_monthly || 650}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_monthly:parseFloat(e.target.value)}}))}
+                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Base Price ($)</label>
+                        <input type="number" defaultValue={lotInfo[activeEditLot]?.base_price || ""}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], base_price:parseFloat(e.target.value)}}))}
+                          placeholder="year-round flat rate"
+                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>High Season ($/mo)</label>
+                        <input type="number" defaultValue={lotInfo[activeEditLot]?.high_season_price || ""}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], high_season_price:parseFloat(e.target.value)}}))}
+                          placeholder="optional"
+                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Low Season ($/mo)</label>
+                        <input type="number" defaultValue={lotInfo[activeEditLot]?.low_season_price || ""}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], low_season_price:parseFloat(e.target.value)}}))}
+                          placeholder="optional"
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>
@@ -1514,13 +1985,29 @@ export default function AlohaMap() {
                     <button onClick={async ()=>{
                       const info = lotInfo[activeEditLot] || {};
                       await saveLotInfo(PARK_ID, activeEditLot, {
-                        max_length: info.max_length || 45,
-                        amperage: info.amperage || 50,
-                        price_daily: info.price_daily || 45,
-                        price_monthly: info.price_monthly || 650,
-                        price_weekly: info.price_weekly || null,
                         price_yearly: info.price_yearly || null,
                         description: info.description || ""
+                      });
+                      // Real lot specs guests actually see (max RV length,
+                      // amperage) and real pricing (base/high/low season,
+                      // daily/weekly rate) live in rv_lots, the same table
+                      // admin.aloharvparkfl.com's "Lots & Seasonal Pricing"
+                      // screen manages — save them there directly instead of
+                      // the old disconnected lot_info fields nobody reads.
+                      await fetch('/api/set-lot-pricing', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          parkId: PARK_ID,
+                          lotName: activeEditLot,
+                          basePrice: info.base_price,
+                          highSeasonPrice: info.high_season_price,
+                          lowSeasonPrice: info.low_season_price,
+                          dailyRate: info.price_daily,
+                          weeklyRate: info.price_weekly,
+                          maxLengthFt: info.max_length_ft,
+                          ampService: info.amp_service,
+                        }),
                       });
                       alert("Lot info saved!");
                     }} style={{ marginTop:8, background:"#16a34a", color:"#fff", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600, width:"100%" }}>
@@ -1538,12 +2025,12 @@ export default function AlohaMap() {
             </>
           )}
 
+          {isAdmin && (
           <button onClick={async ()=>{
             try {
               // Guardar emojis y shapes en Supabase
               await saveToSupabase('emojis', 'all', emojis);
               await saveToSupabase('shapes', 'all', lotShapes);
-              await saveToSupabase('statuses', 'all', statuses);
               await saveToSupabase('texts', 'all', texts);
               await saveToSupabase('lotColors', 'all', lotColors);
               await saveToSupabase('rotations', 'all', rotations);
@@ -1576,6 +2063,21 @@ export default function AlohaMap() {
           }} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"10px 20px", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:600, width:"100%" }}>
             💾 Save All Changes
           </button>
+          )}
+
+          {isRestrictedEditor && (
+          <button onClick={async ()=>{
+            try {
+              await saveToSupabase('emojis', 'all', emojis);
+              await saveToSupabase('lotColors', 'all', lotColors);
+              alert("Changes saved!");
+            } catch(e) {
+              alert("⚠️ Error: " + e.message);
+            }
+          }} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"10px 20px", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:600, width:"100%" }}>
+            💾 Save Changes
+          </button>
+          )}
         </div>
       )}
 
@@ -1586,6 +2088,8 @@ export default function AlohaMap() {
           status={selected.status}
           lotInfo={lotInfo[selected.lot]}
           parkSettings={parkSettings}
+          reservedUntil={reservedDates[selected.lot]}
+          requiresCallOffice={!!bookingDisabled[selected.lot]}
           onClose={() => setSelected(null)}
         />
       )}

@@ -3,7 +3,13 @@ import { useState } from 'react';
 const LABELS = { daily: 'Daily', monthly: 'Monthly', yearly: 'Yearly' };
 const UNIT_LABELS = { daily: 'day(s)', monthly: 'month(s)', yearly: 'year(s)' };
 
+// Limited storage spots — always call-the-office, regardless of any
+// lot_info.phone_only flag (which has been unreliable to keep in sync).
+// Checking the lot ID directly here means this can never silently fail.
+const PHONE_ONLY_LOTS = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
+
 export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
+  const isPhoneOnly = PHONE_ONLY_LOTS.includes(lotId) || !!lotInfo?.phone_only;
   const [billingType, setBillingType] = useState('monthly');
   const [quantity, setQuantity] = useState(1);
   const [isSubscription, setIsSubscription] = useState(false);
@@ -57,7 +63,13 @@ export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
         throw new Error(data.error || 'Error creating payment');
       }
 
-      window.location.href = data.url;
+      // Aug 5: Stripe Checkout can't run in an iframe — redirect the top
+      // window so it actually loads instead of silently failing.
+      try {
+        window.top.location.href = data.url;
+      } catch {
+        window.location.href = data.url;
+      }
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
       setLoading(false);
@@ -96,6 +108,18 @@ export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
             <div style={styles.descBox}>{lotInfo.description}</div>
           )}
 
+          {isPhoneOnly ? (
+            <div style={styles.detailsBox}>
+              <p style={{ margin: 0, fontSize: 13, color: '#374151', lineHeight: 1.6 }}>
+                Need RV storage?
+                <br />
+                Please contact the office for current availability and pricing.
+                <br />
+                📞 Phone: (689) 252-0567
+              </p>
+            </div>
+          ) : (
+          <>
           <label style={styles.label}>Billing Type</label>
           <select
             style={styles.select}
@@ -154,6 +178,8 @@ export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
           >
             {loading ? 'Processing...' : isSubscription ? 'Subscribe' : 'Pay Now'}
           </button>
+          </>
+          )}
         </div>
       </div>
     </div>

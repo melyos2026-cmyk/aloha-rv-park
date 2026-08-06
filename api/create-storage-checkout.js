@@ -44,6 +44,12 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Lot information not found' });
     }
 
+    if (lotInfo.phone_only) {
+      return res.status(403).json({
+        error: 'This lot is a limited storage space — please call the office to book it.',
+      });
+    }
+
     const rateField =
       billingType === 'daily' ? 'price_daily' :
       billingType === 'monthly' ? 'price_monthly' : 'price_yearly';
