@@ -139,8 +139,8 @@ export default async function handler(req, res) {
         taxCents: String(taxCents),
         feeCents: String(processingFeeCents),
       },
-      success_url: `${origin}/?propane_payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/?propane_payment=cancelled`,
+      success_url: `${origin}/?park_id=${parkId || 'aloha'}&propane_payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/?park_id=${parkId || 'aloha'}&propane_payment=cancelled`,
     });
 
     return res.status(200).json({ url: session.url, id: session.id });

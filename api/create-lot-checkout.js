@@ -354,8 +354,8 @@ export default async function handler(req, res) {
       // Park Specified" safety guard and shows a scary error instead of
       // a normal post-payment landing. lot_payment=success/cancelled was
       // also never actually read/used anywhere in the frontend.
-      success_url: `https://aloharvparkfl.com/`,
-      cancel_url: `https://aloharvparkfl.com/`,
+      success_url: `https://aloharvparkfl.com/?park_id=${PARK_ID}&lot_payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `https://aloharvparkfl.com/?park_id=${PARK_ID}&lot_payment=cancelled`,
     });
 
     return res.status(200).json({ url: session.url, id: session.id });

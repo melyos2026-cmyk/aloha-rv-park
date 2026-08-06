@@ -130,8 +130,8 @@ export default async function handler(req, res) {
           park: 'aloha-rv-park',
           service: 'rv_storage',
         },
-        success_url: `${origin}/?storage_payment=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/?storage_payment=cancelled`,
+        success_url: `${origin}/?park_id=${PARK_ID}&storage_payment=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/?park_id=${PARK_ID}&storage_payment=cancelled`,
       });
     } else {
       const lineItemAmount = Math.round(unitAmount * qty);
@@ -182,8 +182,8 @@ export default async function handler(req, res) {
           park: 'aloha-rv-park',
           service: 'rv_storage',
         },
-        success_url: `${origin}/?storage_payment=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/?storage_payment=cancelled`,
+        success_url: `${origin}/?park_id=${PARK_ID}&storage_payment=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/?park_id=${PARK_ID}&storage_payment=cancelled`,
       });
     }
 
