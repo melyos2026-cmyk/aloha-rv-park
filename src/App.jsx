@@ -1126,7 +1126,7 @@ export default function AlohaMap() {
                     )}
                     {item.emoji === "⛽" && item.label && (item.label.toLowerCase().includes("propane") || item.label.toLowerCase().includes("propano")) && (
                       <div style={{ marginTop:16 }}>
-                        <button onClick={()=>setPropaneModalLotId(String(item.id))}
+                        <button onClick={()=>{ setActiveEmoji(null); setPropaneModalLotId(String(item.id)); }}
                           style={{ display:"block", width:"100%", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 20px", borderRadius:50, fontWeight:700, fontSize:15, fontFamily:"sans-serif", border:"none", cursor:"pointer", boxShadow:"0 4px 12px rgba(22,163,74,0.3)", marginBottom:10 }}>
                           💳 Buy Propane
                         </button>
