@@ -32,6 +32,18 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Park not found' });
     }
 
+    // Aug 6 (per Mely): this widget's checkout never had the Connect split
+    // that every other checkout in the system uses — found via a real
+    // live-mode test payment that landed 100% in MelyOS's own balance
+    // instead of splitting with the park. Same lookup pattern as
+    // create-lot-checkout.js.
+    const { data: parkSettingsRow } = await supabase
+      .from('park_settings')
+      .select('stripe_connect_account_id, stripe_connect_onboarded')
+      .eq('company_id', company.id)
+      .maybeSingle();
+    const canSplit = parkSettingsRow?.stripe_connect_account_id && parkSettingsRow?.stripe_connect_onboarded;
+
     const { data: product } = await supabase
       .from('propane_pricing')
       .select('label, price, unit, taxable, tax_mode')
@@ -129,6 +141,17 @@ export default async function handler(req, res) {
       payment_method_types: ['card'],
       customer_email: customerEmail || undefined,
       line_items,
+      // Aug 6 (per Mely): Aloha gets 100% of the propane subtotal + tax;
+      // MelyOS keeps only the processing fee — same split model as every
+      // other checkout (lot booking, storage).
+      ...(canSplit
+        ? {
+            payment_intent_data: {
+              application_fee_amount: processingFeeCents,
+              transfer_data: { destination: parkSettingsRow.stripe_connect_account_id },
+            },
+          }
+        : {}),
       metadata: {
         productId,
         quantity: String(rawQty),
