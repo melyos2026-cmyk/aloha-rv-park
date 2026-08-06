@@ -49,7 +49,7 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
       : !!selected.taxable);
   const taxIncludedInPrice = tax.enabled && selected?.tax_mode === 'included';
   const salesTax = taxApplies ? subtotal * (tax.ratePercent / 100) : 0;
-  const processingFee = subtotal * 0.04;
+  const processingFee = Math.max(subtotal * 0.04, 1.50);
   const total = subtotal + salesTax + processingFee;
 
   async function handleCheckout() {

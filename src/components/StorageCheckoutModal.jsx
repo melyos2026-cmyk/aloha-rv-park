@@ -22,7 +22,14 @@ export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
     lotInfo?.price_yearly;
 
   const available = !!rate && rate > 0;
-  const total = isSubscription ? rate : (rate || 0) * quantity;
+  const subtotal = isSubscription ? (rate || 0) : (rate || 0) * quantity;
+  // Aug 6: same processing-fee model as propane/lot checkout — 4% or a
+  // $1.50 minimum, whichever is greater — only shown/charged for one-time
+  // payments; subscriptions take the platform's cut from Aloha's share
+  // instead of adding a line item (Stripe subscriptions can't mix a
+  // recurring price with a one-time fee amount cleanly).
+  const processingFee = isSubscription ? 0 : Math.max(subtotal * 0.04, 1.50);
+  const total = subtotal + processingFee;
 
   function handleBillingChange(type) {
     setBillingType(type);
@@ -168,6 +175,18 @@ export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
             <span>{isSubscription ? `Charged ${LABELS[billingType].toLowerCase()}` : 'Total'}</span>
             <span style={styles.totalAmount}>${total.toFixed(2)}</span>
           </div>
+          {!isSubscription && available && (
+            <div style={{ fontSize: 12, color: '#6b7280', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Subtotal</span>
+                <span>${subtotal.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Card Processing Fee</span>
+                <span>${processingFee.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
 
           {error && <div style={styles.error}>{error}</div>}
 
@@ -194,7 +213,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1000,
+    zIndex: 2100,
   },
   modal: {
     background: '#fff',

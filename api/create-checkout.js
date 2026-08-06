@@ -68,11 +68,12 @@ export default async function handler(req, res) {
     const lineItemAmount = isGallon ? Math.round(unitAmount * rawQty) : unitAmount;
     const lineItemQty = isGallon ? 1 : rawQty;
 
-    // 4% card processing fee — a separate charge, not a tax, added on top
-    // of the propane subtotal (Mely: no hay tax en el propano, pero sí un
-    // cargo por procesar la tarjeta).
+    // 4% card processing fee (or $1.50 minimum, whichever is greater) — a
+    // separate charge, not a tax, added on top of the propane subtotal
+    // (Mely: no hay tax en el propano, pero sí un cargo por procesar la
+    // tarjeta).
     const subtotalCents = lineItemAmount * lineItemQty;
-    const processingFeeCents = Math.round(subtotalCents * 0.04);
+    const processingFeeCents = Math.max(Math.round(subtotalCents * 0.04), 150);
 
     // Sales tax — per-company rate (works for any state, not hardcoded).
     // tax_mode overrides the product's default "taxable" rule when set:
