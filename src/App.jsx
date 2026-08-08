@@ -293,7 +293,7 @@ function calcStayPreview(arrivalStr, departureStr, hasWeekly) {
 }
 
 function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requiresCallOffice, onClose }) {
-  const [form, setForm] = useState({ arrival: "", departure: "", rvLength: "" });
+  const [form, setForm] = useState({ arrival: "", departure: "", rvLength: "", slideOutCount: "", slideOutDriverSide: false, slideOutPassengerSide: false });
   const [longStay, setLongStay] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -370,6 +370,26 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
   const rvTooLong =
     !!lotInfo?.max_length_ft && rvLengthNum > 0 && rvLengthNum > lotInfo.max_length_ft;
 
+  // Aug 8 (per Mely): required for short-term reservations here (the map
+  // has no other way to know what's coming), same as RV Length above —
+  // BLOCKS Pay Now, unlike the lease application's softer warning, since
+  // there's no admin review step in between for a direct booking. Long-
+  // term stays don't need this here: they go through requiresApplication
+  // below, and the lease application (which already matches this same
+  // rv_lots data) collects it there instead.
+  const slideOutCountNum = form.slideOutCount ? Number(form.slideOutCount.replace("+", "")) : 0;
+  const lotMaxSlideOuts = lotInfo?.max_slide_outs;
+  const slideOutCountTooMany =
+    !!lotMaxSlideOuts && lotMaxSlideOuts !== "Any" && form.slideOutCount &&
+    slideOutCountNum > Number(lotMaxSlideOuts.replace("+", ""));
+  const lotSlideOutCompat = lotInfo?.slide_out_compatibility;
+  const slideOutSideMismatch =
+    !!lotSlideOutCompat && lotSlideOutCompat !== "Any" &&
+    (!!form.slideOutDriverSide || !!form.slideOutPassengerSide) &&
+    (lotSlideOutCompat === "No Slide-Out" ||
+      (lotSlideOutCompat === "Driver Side Only" && form.slideOutPassengerSide) ||
+      (lotSlideOutCompat === "Passenger Side Only" && form.slideOutDriverSide));
+
   // Stays longer than the park's background-check threshold (admin-editable
   // under Lease Defaults, default 15 days) — and any yearly stay — mean the
   // guest is becoming a resident, not making a short-term reservation. Those
@@ -411,6 +431,18 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
       setError(`This RV (${form.rvLength} ft) is too long for this lot (max ${lotInfo.max_length_ft} ft). Please choose a different lot.`);
       return;
     }
+    if (!form.slideOutCount) {
+      setError("Please select your RV's number of slide-outs so we can confirm it fits this lot.");
+      return;
+    }
+    if (slideOutCountTooMany) {
+      setError(`This lot supports up to ${lotMaxSlideOuts} slide-out(s). Please choose a different lot.`);
+      return;
+    }
+    if (slideOutSideMismatch) {
+      setError(`This lot's slide-out compatibility is "${lotSlideOutCompat}". Please choose a different lot.`);
+      return;
+    }
     if (!hasValidDates) {
       setError("Please select a valid arrival and departure date");
       return;
@@ -430,6 +462,9 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           arrivalDate: form.arrival,
           departureDate: form.departure,
           rvLength: form.rvLength,
+          slideOutCount: form.slideOutCount,
+          slideOutDriverSide: form.slideOutDriverSide,
+          slideOutPassengerSide: form.slideOutPassengerSide,
         }),
       });
 
@@ -570,6 +605,58 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           {rvTooLong && (
             <div style={{ fontSize:12, color:"#dc2626", marginTop:4, fontFamily:"sans-serif" }}>
               This RV ({form.rvLength} ft) is too long for this lot (max {lotInfo.max_length_ft} ft). Please choose a different lot.
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginBottom:16 }}>
+          <label style={{ fontSize:12, fontWeight:700, color:"#374151", display:"block", marginBottom:4, fontFamily:"sans-serif" }}>
+            Number of Slide-Outs
+            <span style={{
+              color: "#dc2626",
+              fontSize: 20,
+              fontWeight: 900,
+              marginLeft: 4,
+              display: "inline-block",
+            }}>
+              *
+            </span>
+          </label>
+          <select
+            value={form.slideOutCount}
+            onChange={(e) => setForm(f => ({ ...f, slideOutCount: e.target.value }))}
+            style={{ width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:8, border: slideOutCountTooMany ? "1px solid #dc2626" : "1px solid #ddd", fontSize:14, fontFamily:"sans-serif" }}
+          >
+            <option value="">Select...</option>
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4+">4+</option>
+          </select>
+          <div style={{ display:"flex", gap:16, marginTop:8, fontFamily:"sans-serif" }}>
+            <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, color:"#374151" }}>
+              <input
+                type="checkbox"
+                checked={form.slideOutDriverSide}
+                onChange={(e) => setForm(f => ({ ...f, slideOutDriverSide: e.target.checked }))}
+              />
+              Driver Side
+            </label>
+            <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, color:"#374151" }}>
+              <input
+                type="checkbox"
+                checked={form.slideOutPassengerSide}
+                onChange={(e) => setForm(f => ({ ...f, slideOutPassengerSide: e.target.checked }))}
+              />
+              Passenger Side
+            </label>
+          </div>
+          {(slideOutCountTooMany || slideOutSideMismatch) && (
+            <div style={{ fontSize:12, color:"#dc2626", marginTop:4, fontFamily:"sans-serif" }}>
+              {slideOutCountTooMany
+                ? `This lot supports up to ${lotMaxSlideOuts} slide-out(s). Please choose a different lot.`
+                : `This lot's slide-out compatibility is "${lotSlideOutCompat}". Please choose a different lot.`}
             </div>
           )}
         </div>
@@ -818,7 +905,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
             </a>
           </div>
         ) : (
-          <button onClick={handlePayNow} disabled={loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength} style={{ display:"block", width:"100%", background: (loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength) ? "#9ca3af" : "linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", border:"none", cursor: loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength ? "default" : "pointer", boxShadow: (loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength) ? "none" : "0 4px 12px rgba(22,163,74,0.3)" }}>
+          <button onClick={handlePayNow} disabled={loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength || !form.slideOutCount || slideOutCountTooMany || slideOutSideMismatch} style={{ display:"block", width:"100%", background: (loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength || !form.slideOutCount || slideOutCountTooMany || slideOutSideMismatch) ? "#9ca3af" : "linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", border:"none", cursor: loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength || !form.slideOutCount || slideOutCountTooMany || slideOutSideMismatch ? "default" : "pointer", boxShadow: (loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength || !form.slideOutCount || slideOutCountTooMany || slideOutSideMismatch) ? "none" : "0 4px 12px rgba(22,163,74,0.3)" }}>
             {loading ? "Processing..." : "Pay Now"}
           </button>
         )}
