@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService } = req.body;
+    const { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService, slideOutCompatibility } = req.body;
 
     if (!parkId || !lotName) {
       return res.status(400).json({ error: 'parkId and lotName are required.' });
@@ -35,17 +35,27 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Park not found' });
     }
 
+    const updatePayload = {
+      base_price: basePrice === '' || basePrice == null ? null : Number(basePrice),
+      high_season_price: highSeasonPrice === '' || highSeasonPrice == null ? null : Number(highSeasonPrice),
+      low_season_price: lowSeasonPrice === '' || lowSeasonPrice == null ? null : Number(lowSeasonPrice),
+      daily_rate: dailyRate === '' || dailyRate == null ? null : Number(dailyRate),
+      weekly_rate: weeklyRate === '' || weeklyRate == null ? null : Number(weeklyRate),
+      max_length_ft: maxLengthFt === '' || maxLengthFt == null ? null : Number(maxLengthFt),
+      amp_service: ampService === '' || ampService == null ? null : String(ampService),
+    };
+    // Aug 8 (per Mely): not every RV fits every lot — some lots can't
+    // physically accommodate a slide-out on one particular side. Only
+    // included in the update when actually sent, so this route's other
+    // callers (if any exist elsewhere without this field) don't
+    // accidentally wipe it back to null.
+    if (slideOutCompatibility !== undefined) {
+      updatePayload.slide_out_compatibility = slideOutCompatibility || 'Any';
+    }
+
     const { error } = await supabase
       .from('rv_lots')
-      .update({
-        base_price: basePrice === '' || basePrice == null ? null : Number(basePrice),
-        high_season_price: highSeasonPrice === '' || highSeasonPrice == null ? null : Number(highSeasonPrice),
-        low_season_price: lowSeasonPrice === '' || lowSeasonPrice == null ? null : Number(lowSeasonPrice),
-        daily_rate: dailyRate === '' || dailyRate == null ? null : Number(dailyRate),
-        weekly_rate: weeklyRate === '' || weeklyRate == null ? null : Number(weeklyRate),
-        max_length_ft: maxLengthFt === '' || maxLengthFt == null ? null : Number(maxLengthFt),
-        amp_service: ampService === '' || ampService == null ? null : String(ampService),
-      })
+      .update(updatePayload)
       .eq('company_id', company.id)
       .eq('lot_name', lotName);
 

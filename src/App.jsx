@@ -505,8 +505,8 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           </div>
         )}
 
-        {(lotInfo?.max_length_ft || lotInfo?.amp_service) && (
-          <div style={{ background:"#f9fafb", borderRadius:8, padding:"10px 12px", marginBottom:16, display:"flex", gap:16, fontFamily:"sans-serif" }}>
+        {(lotInfo?.max_length_ft || lotInfo?.amp_service || (lotInfo?.slide_out_compatibility && lotInfo.slide_out_compatibility !== "Any")) && (
+          <div style={{ background:"#f9fafb", borderRadius:8, padding:"10px 12px", marginBottom:16, display:"flex", gap:16, fontFamily:"sans-serif", flexWrap:"wrap" }}>
             {lotInfo?.max_length_ft && (
               <div>
                 <span style={{ fontSize:11, color:"#6b7280" }}>Max RV Length: </span>
@@ -517,6 +517,12 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
               <div>
                 <span style={{ fontSize:11, color:"#6b7280" }}>Amperage: </span>
                 <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.amp_service} Amp</span>
+              </div>
+            )}
+            {lotInfo?.slide_out_compatibility && lotInfo.slide_out_compatibility !== "Any" && (
+              <div>
+                <span style={{ fontSize:11, color:"#6b7280" }}>Slide-Out: </span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.slide_out_compatibility}</span>
               </div>
             )}
           </div>
@@ -1934,6 +1940,17 @@ export default function AlohaMap() {
                         </select>
                       </div>
                       <div>
+                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Slide-Out Compatibility</label>
+                        <select defaultValue={lotInfo[activeEditLot]?.slide_out_compatibility || "Any"}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], slide_out_compatibility:e.target.value}}))}
+                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
+                          <option value="Any">Any</option>
+                          <option value="Driver Side Only">Driver Side Only</option>
+                          <option value="Passenger Side Only">Passenger Side Only</option>
+                          <option value="No Slide-Out">No Slide-Out</option>
+                        </select>
+                      </div>
+                      <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Daily Price ($)</label>
                         <input type="number" defaultValue={lotInfo[activeEditLot]?.price_daily || 45}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_daily:parseFloat(e.target.value)}}))}
@@ -2007,6 +2024,7 @@ export default function AlohaMap() {
                           weeklyRate: info.price_weekly,
                           maxLengthFt: info.max_length_ft,
                           ampService: info.amp_service,
+                          slideOutCompatibility: info.slide_out_compatibility,
                         }),
                       });
                       alert("Lot info saved!");
