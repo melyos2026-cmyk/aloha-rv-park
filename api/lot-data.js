@@ -58,7 +58,7 @@ async function getPricing(req, res) {
 
   const { data: lots, error: lotsErr } = await supabase
     .from('rv_lots')
-    .select('lot_name, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, max_length_ft, amp_service, use_seasonal_pricing, weekly_high_season_price, weekly_low_season_price, daily_high_season_price, daily_low_season_price, slide_out_compatibility, max_slide_outs, description, photo_url')
+    .select('lot_name, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, max_length_ft, amp_service, use_seasonal_pricing, weekly_high_season_price, weekly_low_season_price, daily_high_season_price, daily_low_season_price, max_driver_slide_outs, max_passenger_slide_outs, description, photo_url')
     .eq('company_id', company.id);
 
   if (lotsErr) throw lotsErr;
@@ -101,8 +101,8 @@ async function getPricing(req, res) {
       low_season_price: l.low_season_price || null,
       max_length_ft: l.max_length_ft || null,
       amp_service: l.amp_service || null,
-      slide_out_compatibility: l.slide_out_compatibility || "Any",
-      max_slide_outs: l.max_slide_outs || "Any",
+      max_driver_slide_outs: l.max_driver_slide_outs || "Any",
+      max_passenger_slide_outs: l.max_passenger_slide_outs || "Any",
       description: l.description || "",
       photo_url: l.photo_url || null,
     };

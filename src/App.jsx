@@ -379,18 +379,15 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
   // rv_lots data) collects it there instead.
   const driverCountNum = form.slideOutDriverCount ? Number(form.slideOutDriverCount.replace("+", "")) : 0;
   const passengerCountNum = form.slideOutPassengerCount ? Number(form.slideOutPassengerCount.replace("+", "")) : 0;
-  const slideOutCountNum = driverCountNum + passengerCountNum;
-  const lotMaxSlideOuts = lotInfo?.max_slide_outs;
-  const slideOutCountTooMany =
-    !!lotMaxSlideOuts && lotMaxSlideOuts !== "Any" && (form.slideOutDriverCount || form.slideOutPassengerCount) &&
-    slideOutCountNum > Number(lotMaxSlideOuts.replace("+", ""));
-  const lotSlideOutCompat = lotInfo?.slide_out_compatibility;
-  const slideOutSideMismatch =
-    !!lotSlideOutCompat && lotSlideOutCompat !== "Any" &&
-    (driverCountNum > 0 || passengerCountNum > 0) &&
-    (lotSlideOutCompat === "No Slide-Out" ||
-      (lotSlideOutCompat === "Driver Side Only" && passengerCountNum > 0) ||
-      (lotSlideOutCompat === "Passenger Side Only" && driverCountNum > 0));
+  const lotMaxDriverSlideOuts = lotInfo?.max_driver_slide_outs;
+  const lotMaxPassengerSlideOuts = lotInfo?.max_passenger_slide_outs;
+  const driverSlideOutTooMany =
+    !!lotMaxDriverSlideOuts && lotMaxDriverSlideOuts !== "Any" && form.slideOutDriverCount &&
+    driverCountNum > Number(lotMaxDriverSlideOuts.replace("+", ""));
+  const passengerSlideOutTooMany =
+    !!lotMaxPassengerSlideOuts && lotMaxPassengerSlideOuts !== "Any" && form.slideOutPassengerCount &&
+    passengerCountNum > Number(lotMaxPassengerSlideOuts.replace("+", ""));
+  const slideOutCountTooMany = driverSlideOutTooMany || passengerSlideOutTooMany;
 
   // Stays longer than the park's background-check threshold (admin-editable
   // under Lease Defaults, default 15 days) — and any yearly stay — mean the
@@ -437,12 +434,12 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
       setError("Please enter your RV's slide-outs (Driver Side and Passenger Side, even if 0) so we can confirm it fits this lot.");
       return;
     }
-    if (slideOutCountTooMany) {
-      setError(`This lot supports up to ${lotMaxSlideOuts} slide-out(s) total. Please choose a different lot.`);
+    if (driverSlideOutTooMany) {
+      setError(`This lot supports up to ${lotMaxDriverSlideOuts} driver-side slide-out(s). Please choose a different lot.`);
       return;
     }
-    if (slideOutSideMismatch) {
-      setError(`This lot's slide-out compatibility is "${lotSlideOutCompat}". Please choose a different lot.`);
+    if (passengerSlideOutTooMany) {
+      setError(`This lot supports up to ${lotMaxPassengerSlideOuts} passenger-side slide-out(s). Please choose a different lot.`);
       return;
     }
     if (!hasValidDates) {
@@ -545,7 +542,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           <img src={lotInfo.photo_url} alt="Lot" style={{ width:"100%", maxHeight:220, objectFit:"cover", borderRadius:10, marginBottom:16 }} />
         )}
 
-        {(lotInfo?.max_length_ft || lotInfo?.amp_service || (lotInfo?.slide_out_compatibility && lotInfo.slide_out_compatibility !== "Any") || (lotInfo?.max_slide_outs && lotInfo.max_slide_outs !== "Any")) && (
+        {(lotInfo?.max_length_ft || lotInfo?.amp_service || (lotInfo?.max_driver_slide_outs && lotInfo.max_driver_slide_outs !== "Any") || (lotInfo?.max_passenger_slide_outs && lotInfo.max_passenger_slide_outs !== "Any")) && (
           <div style={{ background:"#f9fafb", borderRadius:8, padding:"10px 12px", marginBottom:16, display:"flex", gap:16, fontFamily:"sans-serif", flexWrap:"wrap" }}>
             {lotInfo?.max_length_ft && (
               <div>
@@ -559,16 +556,16 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
                 <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.amp_service} Amp</span>
               </div>
             )}
-            {lotInfo?.slide_out_compatibility && lotInfo.slide_out_compatibility !== "Any" && (
+            {lotInfo?.max_driver_slide_outs && lotInfo.max_driver_slide_outs !== "Any" && (
               <div>
-                <span style={{ fontSize:11, color:"#6b7280" }}>Slide-Out: </span>
-                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.slide_out_compatibility}</span>
+                <span style={{ fontSize:11, color:"#6b7280" }}>Max Driver-Side Slide-Outs: </span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.max_driver_slide_outs}</span>
               </div>
             )}
-            {lotInfo?.max_slide_outs && lotInfo.max_slide_outs !== "Any" && (
+            {lotInfo?.max_passenger_slide_outs && lotInfo.max_passenger_slide_outs !== "Any" && (
               <div>
-                <span style={{ fontSize:11, color:"#6b7280" }}>Max Slide-Outs: </span>
-                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.max_slide_outs}</span>
+                <span style={{ fontSize:11, color:"#6b7280" }}>Max Passenger-Side Slide-Outs: </span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.max_passenger_slide_outs}</span>
               </div>
             )}
           </div>
@@ -612,13 +609,16 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
 
         <div style={{ marginBottom:16 }}>
           <label style={{ fontSize:12, fontWeight:700, color:"#374151", display:"block", marginBottom:4, fontFamily:"sans-serif" }}>
-            Driver Side Slide-Outs
+            Driver Side Slide-Outs{" "}
+            {lotMaxDriverSlideOuts && lotMaxDriverSlideOuts !== "Any" && (
+              <span style={{ fontWeight: 400, color: "#9ca3af" }}>(max {lotMaxDriverSlideOuts} for this lot)</span>
+            )}
             <span style={{ color: "#dc2626", fontSize: 20, fontWeight: 900, marginLeft: 4, display: "inline-block" }}>*</span>
           </label>
           <select
             value={form.slideOutDriverCount}
             onChange={(e) => setForm(f => ({ ...f, slideOutDriverCount: e.target.value }))}
-            style={{ width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:8, border: slideOutSideMismatch ? "1px solid #dc2626" : "1px solid #ddd", fontSize:14, fontFamily:"sans-serif" }}
+            style={{ width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:8, border: driverSlideOutTooMany ? "1px solid #dc2626" : "1px solid #ddd", fontSize:14, fontFamily:"sans-serif" }}
           >
             <option value="">Select...</option>
             <option value="0">0</option>
@@ -627,17 +627,25 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
             <option value="3">3</option>
             <option value="4+">4+</option>
           </select>
+          {driverSlideOutTooMany && (
+            <div style={{ fontSize:12, color:"#dc2626", marginTop:4, fontFamily:"sans-serif" }}>
+              This lot supports up to {lotMaxDriverSlideOuts} driver-side slide-out(s). Please choose a different lot.
+            </div>
+          )}
         </div>
 
         <div style={{ marginBottom:16 }}>
           <label style={{ fontSize:12, fontWeight:700, color:"#374151", display:"block", marginBottom:4, fontFamily:"sans-serif" }}>
-            Passenger Side Slide-Outs
+            Passenger Side Slide-Outs{" "}
+            {lotMaxPassengerSlideOuts && lotMaxPassengerSlideOuts !== "Any" && (
+              <span style={{ fontWeight: 400, color: "#9ca3af" }}>(max {lotMaxPassengerSlideOuts} for this lot)</span>
+            )}
             <span style={{ color: "#dc2626", fontSize: 20, fontWeight: 900, marginLeft: 4, display: "inline-block" }}>*</span>
           </label>
           <select
             value={form.slideOutPassengerCount}
             onChange={(e) => setForm(f => ({ ...f, slideOutPassengerCount: e.target.value }))}
-            style={{ width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:8, border: (slideOutSideMismatch || slideOutCountTooMany) ? "1px solid #dc2626" : "1px solid #ddd", fontSize:14, fontFamily:"sans-serif" }}
+            style={{ width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:8, border: passengerSlideOutTooMany ? "1px solid #dc2626" : "1px solid #ddd", fontSize:14, fontFamily:"sans-serif" }}
           >
             <option value="">Select...</option>
             <option value="0">0</option>
@@ -646,11 +654,9 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
             <option value="3">3</option>
             <option value="4+">4+</option>
           </select>
-          {(slideOutCountTooMany || slideOutSideMismatch) && (
+          {passengerSlideOutTooMany && (
             <div style={{ fontSize:12, color:"#dc2626", marginTop:4, fontFamily:"sans-serif" }}>
-              {slideOutCountTooMany
-                ? `This lot supports up to ${lotMaxSlideOuts} slide-out(s) total. Please choose a different lot.`
-                : `This lot's slide-out compatibility is "${lotSlideOutCompat}". Please choose a different lot.`}
+              This lot supports up to {lotMaxPassengerSlideOuts} passenger-side slide-out(s). Please choose a different lot.
             </div>
           )}
         </div>
@@ -899,7 +905,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
             </a>
           </div>
         ) : (
-          <button onClick={handlePayNow} disabled={loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength || !form.slideOutDriverCount || !form.slideOutPassengerCount || slideOutCountTooMany || slideOutSideMismatch} style={{ display:"block", width:"100%", background: (loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength || !form.slideOutDriverCount || !form.slideOutPassengerCount || slideOutCountTooMany || slideOutSideMismatch) ? "#9ca3af" : "linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", border:"none", cursor: loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength || !form.slideOutDriverCount || !form.slideOutPassengerCount || slideOutCountTooMany || slideOutSideMismatch ? "default" : "pointer", boxShadow: (loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength || !form.slideOutDriverCount || !form.slideOutPassengerCount || slideOutCountTooMany || slideOutSideMismatch) ? "none" : "0 4px 12px rgba(22,163,74,0.3)" }}>
+          <button onClick={handlePayNow} disabled={loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength || !form.slideOutDriverCount || !form.slideOutPassengerCount || driverSlideOutTooMany || passengerSlideOutTooMany} style={{ display:"block", width:"100%", background: (loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength || !form.slideOutDriverCount || !form.slideOutPassengerCount || driverSlideOutTooMany || passengerSlideOutTooMany) ? "#9ca3af" : "linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 14px", borderRadius:8, fontWeight:700, fontSize:14, fontFamily:"sans-serif", border:"none", cursor: loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength || !form.slideOutDriverCount || !form.slideOutPassengerCount || driverSlideOutTooMany || passengerSlideOutTooMany ? "default" : "pointer", boxShadow: (loading || !hasValidDates || hasOverlap || rvTooLong || !form.rvLength || !form.slideOutDriverCount || !form.slideOutPassengerCount || driverSlideOutTooMany || passengerSlideOutTooMany) ? "none" : "0 4px 12px rgba(22,163,74,0.3)" }}>
             {loading ? "Processing..." : "Pay Now"}
           </button>
         )}
@@ -2039,20 +2045,22 @@ export default function AlohaMap() {
                         </select>
                       </div>
                       <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Slide-Out Compatibility</label>
-                        <select key={activeEditLot + "-slide_out_compatibility"} defaultValue={lotInfo[activeEditLot]?.slide_out_compatibility || "Any"}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], slide_out_compatibility:e.target.value}}))}
+                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max Driver Side Slide-Outs</label>
+                        <select key={activeEditLot + "-max_driver_slide_outs"} defaultValue={lotInfo[activeEditLot]?.max_driver_slide_outs || "Any"}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_driver_slide_outs:e.target.value}}))}
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
                           <option value="Any">Any</option>
-                          <option value="Driver Side Only">Driver Side Only</option>
-                          <option value="Passenger Side Only">Passenger Side Only</option>
-                          <option value="No Slide-Out">No Slide-Out</option>
+                          <option value="0">0</option>
+                          <option value="1">1</option>
+                          <option value="2">2</option>
+                          <option value="3">3</option>
+                          <option value="4+">4+</option>
                         </select>
                       </div>
                       <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max Slide-Outs</label>
-                        <select key={activeEditLot + "-max_slide_outs"} defaultValue={lotInfo[activeEditLot]?.max_slide_outs || "Any"}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_slide_outs:e.target.value}}))}
+                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max Passenger Side Slide-Outs</label>
+                        <select key={activeEditLot + "-max_passenger_slide_outs"} defaultValue={lotInfo[activeEditLot]?.max_passenger_slide_outs || "Any"}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_passenger_slide_outs:e.target.value}}))}
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
                           <option value="Any">Any</option>
                           <option value="0">0</option>
@@ -2188,8 +2196,8 @@ export default function AlohaMap() {
                           weeklyRate: info.price_weekly,
                           maxLengthFt: info.max_length_ft,
                           ampService: info.amp_service,
-                          slideOutCompatibility: info.slide_out_compatibility,
-                          maxSlideOuts: info.max_slide_outs,
+                          maxDriverSlideOuts: info.max_driver_slide_outs,
+                          maxPassengerSlideOuts: info.max_passenger_slide_outs,
                           description: info.description,
                         }),
                       });

@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService, slideOutCompatibility, photoUrl, maxSlideOuts, description } = req.body;
+    const { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService, photoUrl, maxDriverSlideOuts, maxPassengerSlideOuts, description } = req.body;
 
     if (!parkId || !lotName) {
       return res.status(400).json({ error: 'parkId and lotName are required.' });
@@ -45,20 +45,23 @@ export default async function handler(req, res) {
       amp_service: ampService === '' || ampService == null ? null : String(ampService),
     };
     // Aug 8 (per Mely): not every RV fits every lot — some lots can't
-    // physically accommodate a slide-out on one particular side. Only
-    // included in the update when actually sent, so this route's other
-    // callers (if any exist elsewhere without this field) don't
-    // accidentally wipe it back to null.
-    if (slideOutCompatibility !== undefined) {
-      updatePayload.slide_out_compatibility = slideOutCompatibility || 'Any';
+    // physically accommodate slide-outs on one particular side, or too
+    // many of them. Independent max per side (not a single combined
+    // count+category) so an applicant's separate Driver/Passenger side
+    // counts can be checked precisely. Only included in the update when
+    // actually sent, so this route's other callers (if any exist
+    // elsewhere without these fields) don't accidentally wipe them back
+    // to null.
+    if (maxDriverSlideOuts !== undefined) {
+      updatePayload.max_driver_slide_outs = maxDriverSlideOuts || 'Any';
+    }
+    if (maxPassengerSlideOuts !== undefined) {
+      updatePayload.max_passenger_slide_outs = maxPassengerSlideOuts || 'Any';
     }
     // Aug 8: lets the admin remove a photo (photoUrl: null) without
     // needing a separate endpoint — upload-lot-photo.js handles setting one.
     if (photoUrl !== undefined) {
       updatePayload.photo_url = photoUrl;
-    }
-    if (maxSlideOuts !== undefined) {
-      updatePayload.max_slide_outs = maxSlideOuts || 'Any';
     }
     if (description !== undefined) {
       updatePayload.description = description;
