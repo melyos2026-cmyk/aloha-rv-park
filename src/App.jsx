@@ -1943,13 +1943,13 @@ export default function AlohaMap() {
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:8 }}>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max RV Length (ft)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.max_length_ft || lotInfo[activeEditLot]?.max_length || 45}
+                        <input type="number" key={activeEditLot + "-max_length_ft"} defaultValue={lotInfo[activeEditLot]?.max_length_ft || lotInfo[activeEditLot]?.max_length || 45}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_length_ft:parseInt(e.target.value)}}))}
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Amperage</label>
-                        <select defaultValue={lotInfo[activeEditLot]?.amp_service || String(lotInfo[activeEditLot]?.amperage || 50)}
+                        <select key={activeEditLot + "-amp_service"} defaultValue={lotInfo[activeEditLot]?.amp_service || String(lotInfo[activeEditLot]?.amperage || 50)}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], amp_service:e.target.value}}))}
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
                           <option value="30">30 Amp</option>
@@ -1959,7 +1959,7 @@ export default function AlohaMap() {
                       </div>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Slide-Out Compatibility</label>
-                        <select defaultValue={lotInfo[activeEditLot]?.slide_out_compatibility || "Any"}
+                        <select key={activeEditLot + "-slide_out_compatibility"} defaultValue={lotInfo[activeEditLot]?.slide_out_compatibility || "Any"}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], slide_out_compatibility:e.target.value}}))}
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
                           <option value="Any">Any</option>
@@ -1970,7 +1970,7 @@ export default function AlohaMap() {
                       </div>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max Slide-Outs</label>
-                        <select defaultValue={lotInfo[activeEditLot]?.max_slide_outs || "Any"}
+                        <select key={activeEditLot + "-max_slide_outs"} defaultValue={lotInfo[activeEditLot]?.max_slide_outs || "Any"}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_slide_outs:e.target.value}}))}
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
                           <option value="Any">Any</option>
@@ -1983,41 +1983,41 @@ export default function AlohaMap() {
                       </div>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Daily Price ($)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.price_daily || 45}
+                        <input type="number" key={activeEditLot + "-price_daily"} defaultValue={lotInfo[activeEditLot]?.price_daily || 45}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_daily:parseFloat(e.target.value)}}))}
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Base Price ($)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.base_price || ""}
+                        <input type="number" key={activeEditLot + "-base_price"} defaultValue={lotInfo[activeEditLot]?.base_price || ""}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], base_price:parseFloat(e.target.value)}}))}
                           placeholder="year-round flat rate"
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>High Season ($/mo)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.high_season_price || ""}
+                        <input type="number" key={activeEditLot + "-high_season_price"} defaultValue={lotInfo[activeEditLot]?.high_season_price || ""}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], high_season_price:parseFloat(e.target.value)}}))}
                           placeholder="optional"
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Low Season ($/mo)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.low_season_price || ""}
+                        <input type="number" key={activeEditLot + "-low_season_price"} defaultValue={lotInfo[activeEditLot]?.low_season_price || ""}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], low_season_price:parseFloat(e.target.value)}}))}
                           placeholder="optional"
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Weekly Price ($)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.price_weekly || ""}
+                        <input type="number" key={activeEditLot + "-price_weekly"} defaultValue={lotInfo[activeEditLot]?.price_weekly || ""}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_weekly:parseFloat(e.target.value)}}))}
                           placeholder="optional"
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Yearly Price ($)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.price_yearly || ""}
+                        <input type="number" key={activeEditLot + "-price_yearly"} defaultValue={lotInfo[activeEditLot]?.price_yearly || ""}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_yearly:parseFloat(e.target.value)}}))}
                           placeholder="optional"
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
@@ -2025,7 +2025,7 @@ export default function AlohaMap() {
                     </div>
                     <div style={{ marginTop:8 }}>
                       <label style={{ fontSize:11, color:"#6b7280", display:"block", marginBottom:3 }}>Description</label>
-                      <textarea defaultValue={lotInfo[activeEditLot]?.description || ""}
+                      <textarea key={activeEditLot + "-description"} defaultValue={lotInfo[activeEditLot]?.description || ""}
                         onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], description:e.target.value}}))}
                         placeholder="e.g. Corner lot, extra space, near pool..."
                         style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box", resize:"vertical", minHeight:60 }} />
