@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService, slideOutCompatibility } = req.body;
+    const { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService, slideOutCompatibility, photoUrl, maxSlideOuts, description } = req.body;
 
     if (!parkId || !lotName) {
       return res.status(400).json({ error: 'parkId and lotName are required.' });
@@ -51,6 +51,17 @@ export default async function handler(req, res) {
     // accidentally wipe it back to null.
     if (slideOutCompatibility !== undefined) {
       updatePayload.slide_out_compatibility = slideOutCompatibility || 'Any';
+    }
+    // Aug 8: lets the admin remove a photo (photoUrl: null) without
+    // needing a separate endpoint — upload-lot-photo.js handles setting one.
+    if (photoUrl !== undefined) {
+      updatePayload.photo_url = photoUrl;
+    }
+    if (maxSlideOuts !== undefined) {
+      updatePayload.max_slide_outs = maxSlideOuts || 'Any';
+    }
+    if (description !== undefined) {
+      updatePayload.description = description;
     }
 
     const { error } = await supabase

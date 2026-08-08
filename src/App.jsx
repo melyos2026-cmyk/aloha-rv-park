@@ -505,7 +505,11 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           </div>
         )}
 
-        {(lotInfo?.max_length_ft || lotInfo?.amp_service || (lotInfo?.slide_out_compatibility && lotInfo.slide_out_compatibility !== "Any")) && (
+        {lotInfo?.photo_url && (
+          <img src={lotInfo.photo_url} alt="Lot" style={{ width:"100%", maxHeight:220, objectFit:"cover", borderRadius:10, marginBottom:16 }} />
+        )}
+
+        {(lotInfo?.max_length_ft || lotInfo?.amp_service || (lotInfo?.slide_out_compatibility && lotInfo.slide_out_compatibility !== "Any") || (lotInfo?.max_slide_outs && lotInfo.max_slide_outs !== "Any")) && (
           <div style={{ background:"#f9fafb", borderRadius:8, padding:"10px 12px", marginBottom:16, display:"flex", gap:16, fontFamily:"sans-serif", flexWrap:"wrap" }}>
             {lotInfo?.max_length_ft && (
               <div>
@@ -525,6 +529,18 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
                 <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.slide_out_compatibility}</span>
               </div>
             )}
+            {lotInfo?.max_slide_outs && lotInfo.max_slide_outs !== "Any" && (
+              <div>
+                <span style={{ fontSize:11, color:"#6b7280" }}>Max Slide-Outs: </span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{lotInfo.max_slide_outs}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {lotInfo?.description && (
+          <div style={{ fontSize:12, color:"#6b7280", lineHeight:1.5, marginBottom:16, fontFamily:"sans-serif" }}>
+            {lotInfo.description}
           </div>
         )}
 
@@ -983,6 +999,8 @@ export default function AlohaMap() {
   const scaleFactor = (scale.w || 900) / 900;
   const [draftLots, setDraftLots] = useState(LOTS);
   const [activeEditLot, setActiveEditLot] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoUploadError, setPhotoUploadError] = useState("");
   const [snapLines, setSnapLines] = useState({ x: null, y: null });
   const [newLotName, setNewLotName] = useState("");
   const [texts, setTexts] = useState([]);
@@ -1951,6 +1969,19 @@ export default function AlohaMap() {
                         </select>
                       </div>
                       <div>
+                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max Slide-Outs</label>
+                        <select defaultValue={lotInfo[activeEditLot]?.max_slide_outs || "Any"}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_slide_outs:e.target.value}}))}
+                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
+                          <option value="Any">Any</option>
+                          <option value="0">0</option>
+                          <option value="1">1</option>
+                          <option value="2">2</option>
+                          <option value="3">3</option>
+                          <option value="4+">4+</option>
+                        </select>
+                      </div>
+                      <div>
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Daily Price ($)</label>
                         <input type="number" defaultValue={lotInfo[activeEditLot]?.price_daily || 45}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_daily:parseFloat(e.target.value)}}))}
@@ -1999,11 +2030,59 @@ export default function AlohaMap() {
                         placeholder="e.g. Corner lot, extra space, near pool..."
                         style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box", resize:"vertical", minHeight:60 }} />
                     </div>
+                    <div style={{ marginTop:8 }}>
+                      <label style={{ fontSize:11, color:"#6b7280", display:"block", marginBottom:3 }}>Photo (Optional)</label>
+                      {lotInfo[activeEditLot]?.photo_url && (
+                        <div style={{ marginBottom:6, position:"relative", display:"inline-block" }}>
+                          <img src={lotInfo[activeEditLot].photo_url} alt="Lot" style={{ maxWidth:"100%", maxHeight:120, borderRadius:6, display:"block" }} />
+                          <button type="button" onClick={async ()=>{
+                            setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], photo_url:null}}));
+                            await fetch('/api/set-lot-pricing', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ parkId: PARK_ID, lotName: activeEditLot, photoUrl: null }),
+                            });
+                          }} style={{ position:"absolute", top:4, right:4, background:"#dc2626", color:"#fff", border:"none", borderRadius:6, width:22, height:22, cursor:"pointer", fontSize:12, lineHeight:"22px", padding:0 }}>
+                            ×
+                          </button>
+                        </div>
+                      )}
+                      <input type="file" accept="image/*" disabled={uploadingPhoto}
+                        onChange={async (e)=>{
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setPhotoUploadError("");
+                          setUploadingPhoto(true);
+                          try {
+                            const imageBase64 = await new Promise((resolve, reject) => {
+                              const reader = new FileReader();
+                              reader.onload = () => resolve(reader.result);
+                              reader.onerror = reject;
+                              reader.readAsDataURL(file);
+                            });
+                            const res = await fetch('/api/upload-lot-photo', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ parkId: PARK_ID, lotName: activeEditLot, imageBase64, fileName: file.name }),
+                            });
+                            const result = await res.json();
+                            if (!res.ok) throw new Error(result.error || 'Upload failed');
+                            setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], photo_url: result.photoUrl}}));
+                          } catch (err) {
+                            setPhotoUploadError(err.message || 'Upload failed');
+                          }
+                          setUploadingPhoto(false);
+                          e.target.value = "";
+                        }}
+                        style={{ fontSize:12 }} />
+                      {uploadingPhoto && <p style={{ fontSize:11, color:"#6b7280", marginTop:4 }}>Uploading...</p>}
+                      {photoUploadError && <p style={{ fontSize:11, color:"#dc2626", marginTop:4 }}>{photoUploadError}</p>}
+                      <p style={{ fontSize:10, color:"#9ca3af", marginTop:4 }}>If no photo is added, guests just see the info above — no image is shown.</p>
+                    </div>
                     <button onClick={async ()=>{
                       const info = lotInfo[activeEditLot] || {};
                       await saveLotInfo(PARK_ID, activeEditLot, {
-                        price_yearly: info.price_yearly || null,
-                        description: info.description || ""
+                        price_yearly: info.price_yearly || null
                       });
                       // Real lot specs guests actually see (max RV length,
                       // amperage) and real pricing (base/high/low season,
@@ -2011,6 +2090,10 @@ export default function AlohaMap() {
                       // admin.aloharvparkfl.com's "Lots & Seasonal Pricing"
                       // screen manages — save them there directly instead of
                       // the old disconnected lot_info fields nobody reads.
+                      // Aug 8 (per Mely): description moved here too, same
+                      // reasoning — it was only ever saved to the old
+                      // lot_info table before, disconnected from everything
+                      // guests actually see.
                       await fetch('/api/set-lot-pricing', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -2025,6 +2108,8 @@ export default function AlohaMap() {
                           maxLengthFt: info.max_length_ft,
                           ampService: info.amp_service,
                           slideOutCompatibility: info.slide_out_compatibility,
+                          maxSlideOuts: info.max_slide_outs,
+                          description: info.description,
                         }),
                       });
                       alert("Lot info saved!");
