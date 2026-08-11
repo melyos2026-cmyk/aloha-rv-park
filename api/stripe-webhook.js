@@ -272,7 +272,7 @@ export default async function handler(req, res) {
       // already happened once and wiped 2 real customer orders along with
       // test data. If bulk-clearing test data, filter by a specific test
       // email/date range instead.
-      const { productId, quantity, lotId, park, residentLot } = session.metadata || {};
+      const { productId, quantity, lotId, park, residentLot, taxCents } = session.metadata || {};
 
       try {
         const qrToken = crypto.randomBytes(16).toString('hex');
@@ -295,6 +295,7 @@ export default async function handler(req, res) {
             qr_token: qrToken,
             redeemed: false,
             resident_lot_name: residentLot || null,
+            tax_amount: taxCents != null ? Number(taxCents) / 100 : null,
           },
           { onConflict: 'stripe_session_id' }
         );

@@ -44,7 +44,7 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
     !!selected &&
     (selected.tax_mode === 'excluded'
       ? true
-      : selected.tax_mode === 'included'
+      : selected.tax_mode === 'included' || selected.tax_mode === 'exempt'
       ? false
       : !!selected.taxable);
   const taxIncludedInPrice = tax.enabled && selected?.tax_mode === 'included';
