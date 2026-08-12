@@ -56,6 +56,51 @@ async function saveLotInfo(parkId, lotKey, info) {
   return res.ok;
 }
 
+// Aug 12 (per Mely): consolidated from 2 separate buttons ("Save Lot
+// Info" + "Save Changes") into one — this runs first inside whichever
+// single save button is showing (AlohaMap's edit panel), so one click
+// saves everything instead of needing both. Module-level (like
+// saveLotInfo above) rather than a closure inside AlohaMap, so it's not
+// tied to one component's scope.
+async function saveActiveLotInfo(activeEditLot, lotInfo) {
+  if (!activeEditLot) return;
+  const info = lotInfo[activeEditLot] || {};
+  if (activeEditLot.startsWith("S")) {
+    await saveLotInfo(PARK_ID, activeEditLot, {
+      lot_type: info.lot_type || "outdoor",
+      size: info.size || "",
+      has_electricity: info.has_electricity || false,
+      amperage: info.has_electricity ? (info.amperage || 30) : null,
+      price_daily: info.price_daily || 10,
+      price_monthly: info.price_monthly || 100,
+      price_yearly: info.price_yearly || null,
+      description: info.description || ""
+    });
+  } else {
+    await saveLotInfo(PARK_ID, activeEditLot, {
+      price_yearly: info.price_yearly || null
+    });
+    await fetch('/api/set-lot-pricing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        parkId: PARK_ID,
+        lotName: activeEditLot,
+        basePrice: info.base_price,
+        highSeasonPrice: info.high_season_price,
+        lowSeasonPrice: info.low_season_price,
+        dailyRate: info.price_daily,
+        weeklyRate: info.price_weekly,
+        maxLengthFt: info.max_length_ft,
+        ampService: info.amp_service,
+        maxDriverSlideOuts: info.max_driver_slide_outs,
+        maxPassengerSlideOuts: info.max_passenger_slide_outs,
+        description: info.description,
+      }),
+    });
+  }
+}
+
 async function ensureRealEstateListing(lotKey) {
   const checkRes = await fetch(SUPABASE_URL + '/rest/v1/real_estate_listings?park_id=eq.' + PARK_ID + '&lot_key=eq.' + lotKey, {
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
@@ -946,49 +991,6 @@ function MyReservationsModal({ parkSettings, onClose }) {
     today.setHours(0, 0, 0, 0);
     const target = new Date(dateStr + "T00:00:00");
     return Math.round((target - today) / 86400000);
-  }
-
-  // Aug 12 (per Mely): consolidated from 2 separate buttons ("Save Lot
-  // Info" + "Save Changes") into one — this runs first inside whichever
-  // single save button is showing, so one click saves everything instead
-  // of needing both.
-  async function saveActiveLotInfo() {
-    if (!activeEditLot) return;
-    const info = lotInfo[activeEditLot] || {};
-    if (activeEditLot.startsWith("S")) {
-      await saveLotInfo(PARK_ID, activeEditLot, {
-        lot_type: info.lot_type || "outdoor",
-        size: info.size || "",
-        has_electricity: info.has_electricity || false,
-        amperage: info.has_electricity ? (info.amperage || 30) : null,
-        price_daily: info.price_daily || 10,
-        price_monthly: info.price_monthly || 100,
-        price_yearly: info.price_yearly || null,
-        description: info.description || ""
-      });
-    } else {
-      await saveLotInfo(PARK_ID, activeEditLot, {
-        price_yearly: info.price_yearly || null
-      });
-      await fetch('/api/set-lot-pricing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          parkId: PARK_ID,
-          lotName: activeEditLot,
-          basePrice: info.base_price,
-          highSeasonPrice: info.high_season_price,
-          lowSeasonPrice: info.low_season_price,
-          dailyRate: info.price_daily,
-          weeklyRate: info.price_weekly,
-          maxLengthFt: info.max_length_ft,
-          ampService: info.amp_service,
-          maxDriverSlideOuts: info.max_driver_slide_outs,
-          maxPassengerSlideOuts: info.max_passenger_slide_outs,
-          description: info.description,
-        }),
-      });
-    }
   }
 
   async function handleCancel(orderId) {
@@ -2212,7 +2214,7 @@ export default function AlohaMap() {
           {isAdmin && (
           <button onClick={async ()=>{
             try {
-              await saveActiveLotInfo();
+              await saveActiveLotInfo(activeEditLot, lotInfo);
               // Guardar emojis y shapes en Supabase
               await saveToSupabase('emojis', 'all', emojis);
               await saveToSupabase('shapes', 'all', lotShapes);
@@ -2253,7 +2255,7 @@ export default function AlohaMap() {
           {isRestrictedEditor && (
           <button onClick={async ()=>{
             try {
-              await saveActiveLotInfo();
+              await saveActiveLotInfo(activeEditLot, lotInfo);
               await saveToSupabase('emojis', 'all', emojis);
               await saveToSupabase('lotColors', 'all', lotColors);
               alert("Changes saved!");
