@@ -8,6 +8,15 @@ import "react-datepicker/dist/react-datepicker.css";
 import { Rnd } from "react-rnd";
 
 const MAP_IMG = "/AlohaRvParkMap.png";
+// Aug 12 (per Mely): the map/lot/emoji positioning system hardcoded the
+// image's aspect ratio as 1130/900 (1.2556), but the real PNG is
+// 1116x1409 (1.2625) — a small mismatch that compounds into visible
+// vertical drift for absolutely-positioned emojis/lots, worse at wider
+// container sizes (desktop) than narrower ones (mobile), which is why
+// the same saved position could look correctly aligned in one view but
+// off in another even though it's the same underlying % coordinate.
+// Update this if the map image is ever replaced with a different size.
+const MAP_ASPECT_RATIO = 1409 / 1116;
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
@@ -1127,7 +1136,7 @@ export default function AlohaMap() {
   const containerRef = useRef(null);
   const [previewWidth, setPreviewWidth] = useState(null); // null = actual device width; 900/390 = forced preview
   const [zoomLevel, setZoomLevel] = useState(1);
-  const [scale, setScale] = useState({ w: 900, h: 1130 });
+  const [scale, setScale] = useState({ w: 900, h: 900 * MAP_ASPECT_RATIO });
   const scaleFactor = (scale.w || 900) / 900;
   const [draftLots, setDraftLots] = useState(LOTS);
   const [activeEditLot, setActiveEditLot] = useState(null);
@@ -1233,7 +1242,7 @@ export default function AlohaMap() {
     const update = () => {
       if (containerRef.current) {
         const w = containerRef.current.offsetWidth;
-        setScale({ w, h: w * (1130 / 900) });
+        setScale({ w, h: w * MAP_ASPECT_RATIO });
       }
     };
     update();
@@ -1317,7 +1326,7 @@ export default function AlohaMap() {
     Object.entries(draftLots).forEach(([key, [ox, oy, ow, oh]]) => {
       if (key === lot) return;
       const mapW = scale.w || 900;
-      const mapH = scale.h || 1130;
+      const mapH = scale.h || (900 * MAP_ASPECT_RATIO);
       const opx = ox / 100 * mapW;
       const opy = oy / 100 * mapH;
       const opw = ow / 100 * mapW;
@@ -1479,7 +1488,7 @@ export default function AlohaMap() {
             const clipPath = shape === "parallelogram-left" ? "polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%)" :
                              shape === "parallelogram-right" ? "polygon(0% 0%, 90% 0%, 100% 100%, 10% 100%)" : "none";
             const mapW = scale.w || 900;
-            const mapH = scale.h || 1130;
+            const mapH = scale.h || (900 * MAP_ASPECT_RATIO);
             const px = x / 100 * mapW;
             const py = y / 100 * mapH;
             const pw = w / 100 * mapW;
@@ -1593,11 +1602,11 @@ export default function AlohaMap() {
             return (
             <Rnd
               key={item.id}
-              position={{ x: item.x / 100 * (scale.w || 900), y: item.y / 100 * (scale.h || 1130) }}
+              position={{ x: item.x / 100 * (scale.w || 900), y: item.y / 100 * (scale.h || (900 * MAP_ASPECT_RATIO)) }}
               size={{ width: item.text.length * textSize * 0.6 + 20 * scaleFactor, height: textSize + 16 * scaleFactor }}
               onDragStop={(e, d) => {
                 const nx = Math.round(d.x / (scale.w || 900) * 1000) / 10;
-                const ny = Math.round(d.y / (scale.h || 1130) * 1000) / 10;
+                const ny = Math.round(d.y / (scale.h || (900 * MAP_ASPECT_RATIO)) * 1000) / 10;
                 setTexts(prev => prev.map(t => t.id === item.id ? { ...t, x: nx, y: ny } : t));
               }}
               enableResizing={false}
@@ -1619,11 +1628,11 @@ export default function AlohaMap() {
             return (
             <Rnd
               key={item.id}
-              position={{ x: item.x / 100 * (scale.w || 900), y: item.y / 100 * (scale.h || 1130) }}
+              position={{ x: item.x / 100 * (scale.w || 900), y: item.y / 100 * (scale.h || (900 * MAP_ASPECT_RATIO)) }}
               size={{ width: emojiSize + 8 * scaleFactor, height: emojiSize + 8 * scaleFactor }}
               onDragStop={(e, d) => {
                 const nx = Math.round(d.x / (scale.w || 900) * 1000) / 10;
-                const ny = Math.round(d.y / (scale.h || 1130) * 1000) / 10;
+                const ny = Math.round(d.y / (scale.h || (900 * MAP_ASPECT_RATIO)) * 1000) / 10;
                 setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, x: nx, y: ny } : em));
               }}
               enableResizing={false}
