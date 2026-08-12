@@ -2532,32 +2532,40 @@ export default function AlohaMap() {
               await saveToSupabase('emojiRotations', 'all', emojiRotations);
               await saveToSupabase('textRotations', 'all', textRotations);
 
-              // Get current file SHA
-              const fileRes = await fetch('/api/save-to-github');
-              const fileData = await fileRes.json();
-              if (!fileRes.ok || !fileData.content) {
-                throw new Error(
-                  "Emoji/color/shape changes were saved, but lot coordinates could not sync to GitHub: " +
-                  (fileData.message || "unknown error — check GITHUB_TOKEN/GITHUB_REPO in Vercel.")
-                );
+              // Aug 12 (per Mely): only sync to GitHub when a lot's
+              // position/size actually changed — most saves are just
+              // emoji/color/text edits and never needed to touch GitHub
+              // at all, so this avoids the confusing "could not sync"
+              // error appearing for changes that were never related to
+              // lot positions in the first place.
+              const lotsChanged = JSON.stringify(draftLots) !== JSON.stringify(LOTS);
+              if (lotsChanged) {
+                // Get current file SHA
+                const fileRes = await fetch('/api/save-to-github');
+                const fileData = await fileRes.json();
+                if (!fileRes.ok || !fileData.content) {
+                  throw new Error(
+                    "Emoji/color/shape changes were saved, but lot coordinates could not sync to GitHub: " +
+                    (fileData.message || "unknown error — check GITHUB_TOKEN/GITHUB_REPO in Vercel.")
+                  );
+                }
+                const sha = fileData.sha;
+                const currentContent = new TextDecoder("utf-8").decode(Uint8Array.from(atob(fileData.content.replace(/\n/g,"")), c => c.charCodeAt(0)));
+                // Replace LOTS in file
+                const lotsStr = "const LOTS = {\n" + Object.entries(draftLots).map(([k,v])=>`  ${k}: [${v.map(n=>n.toFixed(1)).join(", ")}],`).join("\n") + "\n};";
+                const newContent = currentContent.replace(/const LOTS = \{[\s\S]*?\};/, lotsStr);
+                // Commit
+                const updateRes = await fetch('/api/save-to-github', {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ message: "Update lot coordinates from map editor", content: btoa(unescape(encodeURIComponent(newContent))), sha })
+                });
+                if (!updateRes.ok) {
+                  const err = await updateRes.json();
+                  throw new Error("Emoji/color/shape changes were saved, but lot coordinates could not sync to GitHub: " + err.message);
+                }
               }
-              const sha = fileData.sha;
-              const currentContent = new TextDecoder("utf-8").decode(Uint8Array.from(atob(fileData.content.replace(/\n/g,"")), c => c.charCodeAt(0)));
-              // Replace LOTS in file
-              const lotsStr = "const LOTS = {\n" + Object.entries(draftLots).map(([k,v])=>`  ${k}: [${v.map(n=>n.toFixed(1)).join(", ")}],`).join("\n") + "\n};";
-              const newContent = currentContent.replace(/const LOTS = \{[\s\S]*?\};/, lotsStr);
-              // Commit
-              const updateRes = await fetch('/api/save-to-github', {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: "Update lot coordinates from map editor", content: btoa(unescape(encodeURIComponent(newContent))), sha })
-              });
-              if (updateRes.ok) {
-                alert("Changes saved! Updates will appear everywhere in ~30 seconds.");
-              } else {
-                const err = await updateRes.json();
-                alert("⚠️ Error: " + err.message);
-              }
+              alert("Changes saved!" + (lotsChanged ? " Lot position updates will appear everywhere in ~30 seconds." : ""));
             } catch(e) {
               alert("⚠️ Error: " + e.message);
             }
