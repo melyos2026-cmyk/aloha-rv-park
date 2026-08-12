@@ -829,24 +829,30 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
         {(() => {
           // For 'reserved' lots, surface the nearest actually-open date up
           // front so the guest isn't left guessing among all the grayed-out
-          // days. If the admin manually set an "available from" date (Lot
-          // Status Control), that's the authoritative answer — use it
-          // directly instead of computing one, since a manual reservation
-          // doesn't necessarily show up in bookedRanges at all.
+          // days. If the admin manually set a REAL "available from" date
+          // (Lot Status Control), that's the authoritative answer — use it
+          // directly. But a far-future placeholder (e.g. 2099 — set when a
+          // lot is marked Reserved without specifying a real end date) is
+          // meaningless and must NOT be shown to the guest or used instead
+          // of the real booking data — Aug 12 (per Mely): in that case,
+          // ignore it entirely and compute the real next-available date
+          // from bookedRanges instead (the actual short-term reservation's
+          // real departure date), exactly as if reservedUntil were absent —
+          // this is what makes the green available dates on the calendar
+          // meaningful even for a lot currently marked Reserved.
           if (status !== "reserved" || loadingAvailability) return null;
           let candidate;
-          let noKnownEndDate = false;
+          let useReservedUntil = false;
           if (reservedUntil) {
-            candidate = new Date(reservedUntil + "T00:00:00");
-            // Aug 12 (per Mely): a far-future date (e.g. 2099) usually
-            // means the lot was marked Reserved without a real end date
-            // specified — showing that literal date to a guest looks
-            // broken. Treat anything more than 3 years out as "no known
-            // end date" instead.
+            const parsed = new Date(reservedUntil + "T00:00:00");
             const threeYearsOut = new Date();
             threeYearsOut.setFullYear(threeYearsOut.getFullYear() + 3);
-            if (candidate > threeYearsOut) noKnownEndDate = true;
-          } else {
+            if (parsed <= threeYearsOut) {
+              candidate = parsed;
+              useReservedUntil = true;
+            }
+          }
+          if (!useReservedUntil) {
             candidate = new Date();
             candidate.setHours(0, 0, 0, 0);
             let changed = true;
@@ -861,15 +867,6 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
                 }
               }
             }
-          }
-          if (noKnownEndDate) {
-            return (
-              <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"10px 12px", marginBottom:12, fontFamily:"sans-serif" }}>
-                <span style={{ fontSize:12.5, color:"#166534" }}>
-                  This lot is currently reserved with no set end date — please contact the office to check availability.
-                </span>
-              </div>
-            );
           }
           const label = candidate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
           const isoDate = candidate.toISOString().split("T")[0];
