@@ -1259,6 +1259,19 @@ export default function AlohaMap() {
   const isRestrictedEditor = editorRole === "park_admin";
   const isInfoOnly = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "info";
   const [editMode, setEditMode] = useState(false);
+
+  // Aug 12 (per Mely, Phase 2 of the pan/zoom work): react-rnd (the
+  // library powering lot move/resize/rotate in edit mode) doesn't
+  // correctly account for an ancestor CSS transform — dragging while
+  // zoomed/panned would feel wrong (jumpy or offset). Simplest safe fix:
+  // editing always happens at true 1:1 scale, regardless of whatever
+  // zoom/pan a guest (or the admin, before switching to edit) had set.
+  useEffect(() => {
+    if (editMode) {
+      setMapScale(1);
+      setMapPan({ x: 0, y: 0 });
+    }
+  }, [editMode]);
   const [activeEmoji, setActiveEmoji] = useState(null);
   const [propaneModalLotId, setPropaneModalLotId] = useState(null);
   const [propaneReceipt, setPropaneReceipt] = useState(null);
