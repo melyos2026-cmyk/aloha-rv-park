@@ -1552,13 +1552,15 @@ export default function AlohaMap() {
     );
   }
 
+  const isFixedFrame = window.self !== window.top && !editMode;
+
   return (
     <div style={{
-      minHeight: window.self === window.top ? "100vh" : undefined,
-      height: window.self === window.top ? undefined : "100%",
-      display: window.self === window.top ? undefined : "flex",
-      flexDirection: window.self === window.top ? undefined : "column",
-      overflow: window.self === window.top ? undefined : "hidden",
+      minHeight: !isFixedFrame ? "100vh" : undefined,
+      height: isFixedFrame ? "100%" : undefined,
+      display: isFixedFrame ? "flex" : undefined,
+      flexDirection: isFixedFrame ? "column" : undefined,
+      overflow: isFixedFrame ? "hidden" : undefined,
       background:"#f0fdf4", fontFamily:"sans-serif",
     }}>
       <style>{emojiHoverStyle}</style>
@@ -1623,15 +1625,15 @@ export default function AlohaMap() {
       {/* Map Container */}
       <div style={{
         padding:16, display:"flex", justifyContent:"center", zoom: zoomLevel,
-        flex: window.self === window.top ? undefined : 1,
-        minHeight: window.self === window.top ? undefined : 0,
+        flex: isFixedFrame ? 1 : undefined,
+        minHeight: isFixedFrame ? 0 : undefined,
       }}>
         <div
           ref={viewportRef}
           style={{
-            overflow: "hidden",
+            overflow: isFixedFrame ? "hidden" : "visible",
             width: "100%",
-            height: window.self === window.top ? undefined : "100%",
+            height: isFixedFrame ? "100%" : undefined,
             maxWidth: previewWidth || 900,
             touchAction: !editMode && mapScale > minScale ? "none" : "auto",
             cursor: isPanning ? "grabbing" : (!editMode && mapScale > minScale ? "grab" : "default"),
