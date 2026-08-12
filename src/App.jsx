@@ -1525,35 +1525,6 @@ export default function AlohaMap() {
         </p>
       </div>
 
-      {!editMode && (
-        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:8, padding:"10px 16px 0" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:6, background:"#f3f4f6", borderRadius:8, padding:"4px 6px" }}>
-            <button
-              onClick={() => zoomBy(-0.5)}
-              disabled={mapScale <= MIN_MAP_SCALE}
-              style={{ background:"#fff", border:"none", width:30, height:30, borderRadius:6, cursor: mapScale <= MIN_MAP_SCALE ? "default" : "pointer", fontSize:18, fontWeight:700, color: mapScale <= MIN_MAP_SCALE ? "#d1d5db" : "#374151" }}
-            >－</button>
-            <span style={{ fontSize:12, fontWeight:700, color:"#374151", minWidth:44, textAlign:"center" }}>{Math.round(mapScale * 100)}%</span>
-            <button
-              onClick={() => zoomBy(0.5)}
-              disabled={mapScale >= MAX_MAP_SCALE}
-              style={{ background:"#fff", border:"none", width:30, height:30, borderRadius:6, cursor: mapScale >= MAX_MAP_SCALE ? "default" : "pointer", fontSize:18, fontWeight:700, color: mapScale >= MAX_MAP_SCALE ? "#d1d5db" : "#374151" }}
-            >＋</button>
-          </div>
-          {mapScale > MIN_MAP_SCALE && (
-            <button
-              onClick={() => { setMapScale(1); setMapPan({ x: 0, y: 0 }); }}
-              style={{ background:"#f3f4f6", border:"none", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:700, color:"#374151" }}
-            >
-              Reset View
-            </button>
-          )}
-          {mapScale > MIN_MAP_SCALE && (
-            <span style={{ fontSize:11, color:"#9ca3af" }}>Drag to explore</span>
-          )}
-        </div>
-      )}
-
       {canEditMap && editMode && (
         <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", alignItems:"center", gap:8, padding:"12px 16px 0" }}>
           <button
