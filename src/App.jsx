@@ -1990,6 +1990,24 @@ export default function AlohaMap() {
                       onClick={() => { setEmojis(prev => prev.filter(em => em.id !== item.id)); setActiveEmoji(null); }}
                       style={{ background:"#ef4444", color:"#fff", border:"none", borderRadius:6, padding:"5px 10px", cursor:"pointer", fontSize:12, width:"100%", fontWeight:600 }}
                     >🗑 Delete</button>
+                    {isAdmin && (
+                      <div style={{ marginTop:8, paddingTop:8, borderTop:"1px solid #e5e7eb" }}>
+                        <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>COORDINATES (master admin only)</div>
+                        <div style={{ display:"flex", gap:6 }}>
+                          <input
+                            type="number" step="0.1" value={item.x}
+                            onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, x: parseFloat(e.target.value) || 0 } : em))}
+                            style={{ width:"50%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, boxSizing:"border-box" }}
+                          />
+                          <input
+                            type="number" step="0.1" value={item.y}
+                            onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, y: parseFloat(e.target.value) || 0 } : em))}
+                            style={{ width:"50%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, boxSizing:"border-box" }}
+                          />
+                        </div>
+                        <div style={{ fontSize:10, color:"#9ca3af", marginTop:3 }}>x, y (% of map)</div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
