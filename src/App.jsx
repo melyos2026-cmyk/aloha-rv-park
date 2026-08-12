@@ -1136,6 +1136,99 @@ export default function AlohaMap() {
   const containerRef = useRef(null);
   const [previewWidth, setPreviewWidth] = useState(null); // null = actual device width; 900/390 = forced preview
   const [zoomLevel, setZoomLevel] = useState(1);
+  // Aug 12 (per Mely): real Pan & Zoom for the guest-facing map — separate
+  // from the admin-only preview zoom above. Uses a CSS transform (works on
+  // all browsers/mobile, unlike the CSS `zoom` property used for the admin
+  // preview control). getBoundingClientRect() already accounts for this
+  // transform automatically, so existing click/drag position math (lot
+  // hotspots, admin edit dragging) keeps working correctly without changes.
+  const [mapScale, setMapScale] = useState(1);
+  const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const pinchStartRef = useRef(null);
+  const MIN_MAP_SCALE = 1;
+  const MAX_MAP_SCALE = 4;
+
+  function clampPan(pan, scaleValue) {
+    // Aug 12: keeps the map from being dragged so far that you lose it —
+    // the more you're zoomed in, the further you're allowed to pan.
+    const maxOffset = (scaleValue - 1) * 400;
+    return {
+      x: Math.max(-maxOffset, Math.min(maxOffset, pan.x)),
+      y: Math.max(-maxOffset, Math.min(maxOffset, pan.y)),
+    };
+  }
+
+  function zoomBy(delta, center) {
+    setMapScale(prev => {
+      const next = Math.max(MIN_MAP_SCALE, Math.min(MAX_MAP_SCALE, Math.round((prev + delta) * 100) / 100));
+      if (next === MIN_MAP_SCALE) setMapPan({ x: 0, y: 0 });
+      return next;
+    });
+  }
+
+  function handleMapWheel(e) {
+    if (editMode) return; // don't fight with admin lot-dragging
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? 0.15 : -0.15);
+  }
+
+  function handlePanMouseDown(e) {
+    if (editMode || mapScale <= MIN_MAP_SCALE) return;
+    setIsPanning(true);
+    panStartRef.current = { x: e.clientX, y: e.clientY, panX: mapPan.x, panY: mapPan.y };
+  }
+
+  function handlePanMouseMove(e) {
+    if (!isPanning) return;
+    const dx = e.clientX - panStartRef.current.x;
+    const dy = e.clientY - panStartRef.current.y;
+    setMapPan(clampPan({ x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy }, mapScale));
+  }
+
+  function handlePanMouseUp() {
+    setIsPanning(false);
+  }
+
+  function touchDistance(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function handleMapTouchStart(e) {
+    if (editMode) return;
+    if (e.touches.length === 2) {
+      pinchStartRef.current = { dist: touchDistance(e.touches), scale: mapScale };
+    } else if (e.touches.length === 1 && mapScale > MIN_MAP_SCALE) {
+      setIsPanning(true);
+      panStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, panX: mapPan.x, panY: mapPan.y };
+    }
+  }
+
+  function handleMapTouchMove(e) {
+    if (editMode) return;
+    if (e.touches.length === 2 && pinchStartRef.current) {
+      e.preventDefault();
+      const newDist = touchDistance(e.touches);
+      const next = Math.max(
+        MIN_MAP_SCALE,
+        Math.min(MAX_MAP_SCALE, Math.round((pinchStartRef.current.scale * (newDist / pinchStartRef.current.dist)) * 100) / 100)
+      );
+      setMapScale(next);
+    } else if (e.touches.length === 1 && isPanning) {
+      const dx = e.touches[0].clientX - panStartRef.current.x;
+      const dy = e.touches[0].clientY - panStartRef.current.y;
+      setMapPan(clampPan({ x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy }, mapScale));
+    }
+  }
+
+  function handleMapTouchEnd(e) {
+    if (e.touches.length < 2) pinchStartRef.current = null;
+    if (e.touches.length === 0) setIsPanning(false);
+  }
+
   const [scale, setScale] = useState({ w: 900, h: 900 * MAP_ASPECT_RATIO });
   const scaleFactor = (scale.w || 900) / 900;
   const [draftLots, setDraftLots] = useState(LOTS);
@@ -1166,6 +1259,19 @@ export default function AlohaMap() {
   const isRestrictedEditor = editorRole === "park_admin";
   const isInfoOnly = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "info";
   const [editMode, setEditMode] = useState(false);
+
+  // Aug 12 (per Mely, Phase 2 of the pan/zoom work): react-rnd (the
+  // library powering lot move/resize/rotate in edit mode) doesn't
+  // correctly account for an ancestor CSS transform — dragging while
+  // zoomed/panned would feel wrong (jumpy or offset). Simplest safe fix:
+  // editing always happens at true 1:1 scale, regardless of whatever
+  // zoom/pan a guest (or the admin, before switching to edit) had set.
+  useEffect(() => {
+    if (editMode) {
+      setMapScale(1);
+      setMapPan({ x: 0, y: 0 });
+    }
+  }, [editMode]);
   const [activeEmoji, setActiveEmoji] = useState(null);
   const [propaneModalLotId, setPropaneModalLotId] = useState(null);
   const [propaneReceipt, setPropaneReceipt] = useState(null);
@@ -1388,7 +1494,14 @@ export default function AlohaMap() {
   }
 
   return (
-    <div style={{ minHeight: window.self === window.top ? "100vh" : "auto", background:"#f0fdf4", fontFamily:"sans-serif" }}>
+    <div style={{
+      minHeight: window.self === window.top ? "100vh" : undefined,
+      height: window.self === window.top ? undefined : "100%",
+      display: window.self === window.top ? undefined : "flex",
+      flexDirection: window.self === window.top ? undefined : "column",
+      overflow: window.self === window.top ? undefined : "hidden",
+      background:"#f0fdf4", fontFamily:"sans-serif",
+    }}>
       <style>{emojiHoverStyle}</style>
       {/* Header */}
       <div className="map-header" style={{ background:"linear-gradient(135deg,#14532d,#16a34a)", padding:"24px" }}>
@@ -1411,6 +1524,35 @@ export default function AlohaMap() {
           Click any <span style={{ color:"#16a34a" }}>🟢 green</span> or <span style={{ color:"#ca8a04" }}>🟡 orange</span> lot to check availability and reserve it. Hover to see the lot number.
         </p>
       </div>
+
+      {!editMode && (
+        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:8, padding:"10px 16px 0" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, background:"#f3f4f6", borderRadius:8, padding:"4px 6px" }}>
+            <button
+              onClick={() => zoomBy(-0.5)}
+              disabled={mapScale <= MIN_MAP_SCALE}
+              style={{ background:"#fff", border:"none", width:30, height:30, borderRadius:6, cursor: mapScale <= MIN_MAP_SCALE ? "default" : "pointer", fontSize:18, fontWeight:700, color: mapScale <= MIN_MAP_SCALE ? "#d1d5db" : "#374151" }}
+            >－</button>
+            <span style={{ fontSize:12, fontWeight:700, color:"#374151", minWidth:44, textAlign:"center" }}>{Math.round(mapScale * 100)}%</span>
+            <button
+              onClick={() => zoomBy(0.5)}
+              disabled={mapScale >= MAX_MAP_SCALE}
+              style={{ background:"#fff", border:"none", width:30, height:30, borderRadius:6, cursor: mapScale >= MAX_MAP_SCALE ? "default" : "pointer", fontSize:18, fontWeight:700, color: mapScale >= MAX_MAP_SCALE ? "#d1d5db" : "#374151" }}
+            >＋</button>
+          </div>
+          {mapScale > MIN_MAP_SCALE && (
+            <button
+              onClick={() => { setMapScale(1); setMapPan({ x: 0, y: 0 }); }}
+              style={{ background:"#f3f4f6", border:"none", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:700, color:"#374151" }}
+            >
+              Reset View
+            </button>
+          )}
+          {mapScale > MIN_MAP_SCALE && (
+            <span style={{ fontSize:11, color:"#9ca3af" }}>Drag to explore</span>
+          )}
+        </div>
+      )}
 
       {canEditMap && editMode && (
         <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", alignItems:"center", gap:8, padding:"12px 16px 0" }}>
@@ -1447,10 +1589,38 @@ export default function AlohaMap() {
       )}
 
       {/* Map Container */}
-      <div style={{ padding:16, display:"flex", justifyContent:"center", zoom: zoomLevel }}>
+      <div style={{
+        padding:16, display:"flex", justifyContent:"center", zoom: zoomLevel,
+        flex: window.self === window.top ? undefined : 1,
+        minHeight: window.self === window.top ? undefined : 0,
+      }}>
+        <div
+          style={{
+            overflow: "hidden",
+            width: "100%",
+            height: window.self === window.top ? undefined : "100%",
+            maxWidth: previewWidth || 900,
+            touchAction: !editMode && mapScale > MIN_MAP_SCALE ? "none" : "auto",
+            cursor: isPanning ? "grabbing" : (!editMode && mapScale > MIN_MAP_SCALE ? "grab" : "default"),
+          }}
+          onWheel={handleMapWheel}
+          onMouseDown={handlePanMouseDown}
+          onMouseMove={handlePanMouseMove}
+          onMouseUp={handlePanMouseUp}
+          onMouseLeave={handlePanMouseUp}
+          onTouchStart={handleMapTouchStart}
+          onTouchMove={handleMapTouchMove}
+          onTouchEnd={handleMapTouchEnd}
+        >
         <div
           ref={containerRef}
-          style={{ position:"relative", width:"100%", maxWidth:previewWidth || 900, display:"inline-block", userSelect:"none", ...(previewWidth ? { border:"3px solid #166534", borderRadius:12, boxShadow:"0 4px 20px rgba(0,0,0,0.15)" } : {}) }}
+          style={{
+            position:"relative", width:"100%", display:"inline-block", userSelect:"none",
+            ...(previewWidth ? { border:"3px solid #166534", borderRadius:12, boxShadow:"0 4px 20px rgba(0,0,0,0.15)" } : {}),
+            transform: `translate(${mapPan.x}px, ${mapPan.y}px) scale(${mapScale})`,
+            transformOrigin: "center center",
+            transition: isPanning ? "none" : "transform 0.15s ease-out",
+          }}
           onClick={() => setActiveEmoji(null)}
           onMouseMove={editMode ? (e) => {
             if (!dragging) return;
@@ -1604,6 +1774,28 @@ export default function AlohaMap() {
           {/* Texts */}
           {texts.map((item) => {
             const textSize = item.size * scaleFactor;
+
+            // Aug 12 (per Mely): same fix as emojis below — guest view
+            // uses plain CSS % positioning instead of react-rnd's
+            // JS-pixel math, both to fix the same cross-view drift and
+            // because texts previously had no disableDragging guard at
+            // all, meaning a guest could accidentally drag a map label.
+            if (!editMode) {
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    position:"absolute", left:`${item.x}%`, top:`${item.y}%`,
+                    fontSize:textSize, color:item.color, fontWeight:700,
+                    textShadow:"0 1px 3px rgba(0,0,0,0.5)", whiteSpace:"nowrap",
+                    userSelect:"none", zIndex:200, pointerEvents:"none",
+                  }}
+                >
+                  {item.text}
+                </div>
+              );
+            }
+
             return (
             <Rnd
               key={item.id}
@@ -1630,6 +1822,66 @@ export default function AlohaMap() {
           {emojis.map((item) => {
             const rawSize = item.size || 24;
             const emojiSize = rawSize * scaleFactor;
+
+            // Aug 12 (per Mely): guest-facing emojis now use plain CSS %
+            // positioning — the SAME system lots already correctly use —
+            // instead of react-rnd's JS-pixel math (which depends on
+            // scale.w/scale.h staying perfectly in sync with the real
+            // rendered container, and was the actual source of the
+            // cross-view drift, even after the aspect-ratio fix). Only
+            // admin edit mode (or the info-only mode) still needs Rnd,
+            // since only those modes let you drag an emoji to reposition
+            // it.
+            if (!editMode && !isInfoOnly) {
+              return (
+                <div key={item.id} style={{ position:"absolute", left:`${item.x}%`, top:`${item.y}%`, width:0, height:0, zIndex:100 }}>
+                  <span
+                    onClick={e => { e.stopPropagation(); setActiveEmoji(activeEmoji === item.id ? null : item.id); }}
+                    className="map-emoji-hover"
+                    style={{ fontSize: emojiSize, lineHeight:1, userSelect:"none", display:"inline-block", position:"absolute", left:0, top:0, transform:"translate(-50%,-50%)", cursor:"pointer", transition:"transform 0.15s, filter 0.15s" }}
+                  >{item.emoji}</span>
+
+                  {activeEmoji === item.id && (item.label || item.info) && createPortal(
+                    <div onClick={()=>setActiveEmoji(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1999, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+                      <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:20, padding:"24px 28px", minWidth:280, maxWidth:360, width:"100%", boxShadow:"0 24px 64px rgba(0,0,0,0.4)", fontFamily:"sans-serif", position:"relative" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                            <span style={{ fontSize:32 }}>{item.emoji}</span>
+                            <span style={{ fontSize:20, fontWeight:800, color:"#14532d", fontFamily:"Georgia,serif" }}>{item.label}</span>
+                          </div>
+                          <button onClick={()=>setActiveEmoji(null)} style={{ background:"#f3f4f6", border:"none", borderRadius:"50%", width:32, height:32, fontSize:16, cursor:"pointer", color:"#6b7280", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+                        </div>
+                        {item.info && (
+                          <div style={{ background:"#f0fdf4", borderRadius:12, padding:"12px 16px", borderLeft:"4px solid #16a34a" }}>
+                            {item.info.split("\n").filter(l=>l.trim()).map((line, i) => (
+                              <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:10, marginBottom:14 }}>
+                                <span style={{ color:"#16a34a", fontWeight:700, fontSize:16, marginTop:1 }}>•</span>
+                                <p style={{ margin:0, fontSize:15, color:"#166534", fontWeight:500, lineHeight:1.6, fontFamily:"Georgia, serif", letterSpacing:"0.01em" }}>{line}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {item.emoji === "⛽" && item.label && (item.label.toLowerCase().includes("propane") || item.label.toLowerCase().includes("propano")) && (
+                          <div style={{ marginTop:16 }}>
+                            <button onClick={()=>{ setActiveEmoji(null); setPropaneModalLotId(String(item.id)); }}
+                              style={{ display:"block", width:"100%", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 20px", borderRadius:50, fontWeight:700, fontSize:15, fontFamily:"sans-serif", border:"none", cursor:"pointer", boxShadow:"0 4px 12px rgba(22,163,74,0.3)", marginBottom:10 }}>
+                              💳 Buy Propane
+                            </button>
+                            <a href="tel:6892520567" style={{ display:"block", background:"#f3f4f6", color:"#374151", textAlign:"center", padding:"10px 20px", borderRadius:50, fontWeight:700, fontSize:14, fontFamily:"sans-serif", textDecoration:"none", border:"1.5px solid #d1d5db" }}>
+                              📞 Questions: Call (689) 252-0567
+                            </a>
+                          </div>
+                        )}
+                        <div style={{ marginTop:16, textAlign:"center" }}>
+                          <div style={{ fontSize:11, color:"#9ca3af", fontFamily:"sans-serif" }}>🌺 Aloha RV Park · Kissimmee, FL</div>
+                        </div>
+                      </div>
+                    </div>
+                  , document.body)}
+                </div>
+              );
+            }
+
             return (
             <Rnd
               key={item.id}
@@ -1717,12 +1969,11 @@ export default function AlohaMap() {
                   </div>
                 </div>
               , document.body)}
-
-                            {/* no tooltip - title only shows in popup */}
             </Rnd>
             );
           })}
 
+        </div>
         </div>
       </div>
 
