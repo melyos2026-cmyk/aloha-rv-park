@@ -410,6 +410,19 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
     return { start, end };
   });
 
+  // Aug 12 (per Mely): reused for the new green-available /
+  // crossed-out-blocked calendar day styling below.
+  function isDateBlocked(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return bookedRanges.some(r => {
+      const start = new Date(r.arrival_date + "T00:00:00");
+      const end = new Date(r.departure_date + "T00:00:00");
+      end.setDate(end.getDate() - 1); // checkout day itself is available for a new arrival
+      return d >= start && d <= end;
+    });
+  }
+
   function rangeOverlaps(arrivalStr, departureStr) {
     const arrival = new Date(arrivalStr + "T00:00:00");
     const departure = new Date(departureStr + "T00:00:00");
@@ -869,6 +882,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
               }}
               minDate={new Date()}
               excludeDateIntervals={excludeDateIntervals}
+              dayClassName={(date) => isDateBlocked(date) ? "day-blocked" : "day-available"}
               dateFormat="MM/dd/yyyy"
               placeholderText={loadingAvailability ? "Loading..." : "Select date"}
               disabled={loadingAvailability}
@@ -892,6 +906,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
               }}
               minDate={form.arrival ? new Date(form.arrival + "T00:00:00") : new Date()}
               excludeDateIntervals={excludeDateIntervalsForDeparture}
+              dayClassName={(date) => isDateBlocked(date) ? "day-blocked" : "day-available"}
               dateFormat="MM/dd/yyyy"
               placeholderText={loadingAvailability ? "Loading..." : "Select date"}
               disabled={loadingAvailability}
@@ -1097,6 +1112,19 @@ const emojiHoverStyle = `
 .map-emoji-hover:hover {
   transform: scale(1.25);
   filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.9));
+}
+.react-datepicker__day.day-available {
+  background-color: #bbf7d0;
+  border-radius: 4px;
+  color: #14532d;
+  font-weight: 600;
+}
+.react-datepicker__day.day-available:hover {
+  background-color: #86efac;
+}
+.react-datepicker__day.day-blocked {
+  text-decoration: line-through;
+  color: #9ca3af;
 }
 .map-header {
   display: flex;
