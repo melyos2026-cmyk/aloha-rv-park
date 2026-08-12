@@ -415,6 +415,9 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
   function isDateBlocked(date) {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (d < today) return true; // past dates were showing green/available — they never should
     return bookedRanges.some(r => {
       const start = new Date(r.arrival_date + "T00:00:00");
       const end = new Date(r.departure_date + "T00:00:00");
