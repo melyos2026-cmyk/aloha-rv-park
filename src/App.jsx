@@ -1489,7 +1489,14 @@ export default function AlohaMap() {
   }
 
   return (
-    <div style={{ minHeight: window.self === window.top ? "100vh" : "auto", background:"#f0fdf4", fontFamily:"sans-serif" }}>
+    <div style={{
+      minHeight: window.self === window.top ? "100vh" : undefined,
+      height: window.self === window.top ? undefined : "100%",
+      display: window.self === window.top ? undefined : "flex",
+      flexDirection: window.self === window.top ? undefined : "column",
+      overflow: window.self === window.top ? undefined : "hidden",
+      background:"#f0fdf4", fontFamily:"sans-serif",
+    }}>
       <style>{emojiHoverStyle}</style>
       {/* Header */}
       <div className="map-header" style={{ background:"linear-gradient(135deg,#14532d,#16a34a)", padding:"24px" }}>
@@ -1577,11 +1584,16 @@ export default function AlohaMap() {
       )}
 
       {/* Map Container */}
-      <div style={{ padding:16, display:"flex", justifyContent:"center", zoom: zoomLevel }}>
+      <div style={{
+        padding:16, display:"flex", justifyContent:"center", zoom: zoomLevel,
+        flex: window.self === window.top ? undefined : 1,
+        minHeight: window.self === window.top ? undefined : 0,
+      }}>
         <div
           style={{
             overflow: "hidden",
             width: "100%",
+            height: window.self === window.top ? undefined : "100%",
             maxWidth: previewWidth || 900,
             touchAction: !editMode && mapScale > MIN_MAP_SCALE ? "none" : "auto",
             cursor: isPanning ? "grabbing" : (!editMode && mapScale > MIN_MAP_SCALE ? "grab" : "default"),
