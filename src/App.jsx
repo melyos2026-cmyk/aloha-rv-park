@@ -1757,6 +1757,28 @@ export default function AlohaMap() {
           {/* Texts */}
           {texts.map((item) => {
             const textSize = item.size * scaleFactor;
+
+            // Aug 12 (per Mely): same fix as emojis below — guest view
+            // uses plain CSS % positioning instead of react-rnd's
+            // JS-pixel math, both to fix the same cross-view drift and
+            // because texts previously had no disableDragging guard at
+            // all, meaning a guest could accidentally drag a map label.
+            if (!editMode) {
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    position:"absolute", left:`${item.x}%`, top:`${item.y}%`,
+                    fontSize:textSize, color:item.color, fontWeight:700,
+                    textShadow:"0 1px 3px rgba(0,0,0,0.5)", whiteSpace:"nowrap",
+                    userSelect:"none", zIndex:200, pointerEvents:"none",
+                  }}
+                >
+                  {item.text}
+                </div>
+              );
+            }
+
             return (
             <Rnd
               key={item.id}
@@ -1783,6 +1805,66 @@ export default function AlohaMap() {
           {emojis.map((item) => {
             const rawSize = item.size || 24;
             const emojiSize = rawSize * scaleFactor;
+
+            // Aug 12 (per Mely): guest-facing emojis now use plain CSS %
+            // positioning — the SAME system lots already correctly use —
+            // instead of react-rnd's JS-pixel math (which depends on
+            // scale.w/scale.h staying perfectly in sync with the real
+            // rendered container, and was the actual source of the
+            // cross-view drift, even after the aspect-ratio fix). Only
+            // admin edit mode (or the info-only mode) still needs Rnd,
+            // since only those modes let you drag an emoji to reposition
+            // it.
+            if (!editMode && !isInfoOnly) {
+              return (
+                <div key={item.id} style={{ position:"absolute", left:`${item.x}%`, top:`${item.y}%`, width:0, height:0, zIndex:100 }}>
+                  <span
+                    onClick={e => { e.stopPropagation(); setActiveEmoji(activeEmoji === item.id ? null : item.id); }}
+                    className="map-emoji-hover"
+                    style={{ fontSize: emojiSize, lineHeight:1, userSelect:"none", display:"inline-block", position:"absolute", left:0, top:0, transform:"translate(-50%,-50%)", cursor:"pointer", transition:"transform 0.15s, filter 0.15s" }}
+                  >{item.emoji}</span>
+
+                  {activeEmoji === item.id && (item.label || item.info) && createPortal(
+                    <div onClick={()=>setActiveEmoji(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1999, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+                      <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:20, padding:"24px 28px", minWidth:280, maxWidth:360, width:"100%", boxShadow:"0 24px 64px rgba(0,0,0,0.4)", fontFamily:"sans-serif", position:"relative" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                            <span style={{ fontSize:32 }}>{item.emoji}</span>
+                            <span style={{ fontSize:20, fontWeight:800, color:"#14532d", fontFamily:"Georgia,serif" }}>{item.label}</span>
+                          </div>
+                          <button onClick={()=>setActiveEmoji(null)} style={{ background:"#f3f4f6", border:"none", borderRadius:"50%", width:32, height:32, fontSize:16, cursor:"pointer", color:"#6b7280", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+                        </div>
+                        {item.info && (
+                          <div style={{ background:"#f0fdf4", borderRadius:12, padding:"12px 16px", borderLeft:"4px solid #16a34a" }}>
+                            {item.info.split("\n").filter(l=>l.trim()).map((line, i) => (
+                              <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:10, marginBottom:14 }}>
+                                <span style={{ color:"#16a34a", fontWeight:700, fontSize:16, marginTop:1 }}>•</span>
+                                <p style={{ margin:0, fontSize:15, color:"#166534", fontWeight:500, lineHeight:1.6, fontFamily:"Georgia, serif", letterSpacing:"0.01em" }}>{line}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {item.emoji === "⛽" && item.label && (item.label.toLowerCase().includes("propane") || item.label.toLowerCase().includes("propano")) && (
+                          <div style={{ marginTop:16 }}>
+                            <button onClick={()=>{ setActiveEmoji(null); setPropaneModalLotId(String(item.id)); }}
+                              style={{ display:"block", width:"100%", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 20px", borderRadius:50, fontWeight:700, fontSize:15, fontFamily:"sans-serif", border:"none", cursor:"pointer", boxShadow:"0 4px 12px rgba(22,163,74,0.3)", marginBottom:10 }}>
+                              💳 Buy Propane
+                            </button>
+                            <a href="tel:6892520567" style={{ display:"block", background:"#f3f4f6", color:"#374151", textAlign:"center", padding:"10px 20px", borderRadius:50, fontWeight:700, fontSize:14, fontFamily:"sans-serif", textDecoration:"none", border:"1.5px solid #d1d5db" }}>
+                              📞 Questions: Call (689) 252-0567
+                            </a>
+                          </div>
+                        )}
+                        <div style={{ marginTop:16, textAlign:"center" }}>
+                          <div style={{ fontSize:11, color:"#9ca3af", fontFamily:"sans-serif" }}>🌺 Aloha RV Park · Kissimmee, FL</div>
+                        </div>
+                      </div>
+                    </div>
+                  , document.body)}
+                </div>
+              );
+            }
+
             return (
             <Rnd
               key={item.id}
@@ -1870,8 +1952,6 @@ export default function AlohaMap() {
                   </div>
                 </div>
               , document.body)}
-
-                            {/* no tooltip - title only shows in popup */}
             </Rnd>
             );
           })}
