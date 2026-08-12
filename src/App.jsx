@@ -1708,7 +1708,7 @@ export default function AlohaMap() {
 
             {/* Edit/Preview Toggle */}
       <div style={{ maxWidth:900, margin:"0 auto 10px", display:"flex", justifyContent:"flex-end", gap:8 }}>
-        {isAdmin && editMode && (
+        {canEditMap && editMode && (
           <button
             onClick={() => setShowParkSettings(true)}
             style={{ background:"#374151", color:"#fff", border:"none", padding:"8px 20px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}
