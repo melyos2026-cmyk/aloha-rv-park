@@ -1134,6 +1134,7 @@ export default function AlohaMap() {
   const [payLotSelected, setPayLotSelected] = useState(null);
   const [confirmed, setConfirmed] = useState(null);
   const containerRef = useRef(null);
+  const aboveMapRef = useRef(null);
   const [previewWidth, setPreviewWidth] = useState(null); // null = actual device width; 900/390 = forced preview
   const [zoomLevel, setZoomLevel] = useState(1);
   // Aug 12 (per Mely): real Pan & Zoom for the guest-facing map — separate
@@ -1366,31 +1367,35 @@ export default function AlohaMap() {
   useEffect(() => {
     if (window.self === window.top) return; // not embedded in an iframe, nothing to report
 
-    function reportHeight() {
-      const height = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-      window.parent.postMessage({ type: "aloha-map-height", height }, "*");
+    // Aug 12 (per Mely): the frame is fixed-height now (Pan/Zoom lets
+    // visitors navigate within it) — so this no longer watches a moving
+    // scrollHeight target (that would just measure the fixed frame
+    // itself now, a circular value). Instead, it computes the TRUE
+    // natural height needed to show the whole page with zero cropping
+    // at the current device width: header+legend+instructions (measured
+    // directly) + the map graphic's real height at this width
+    // (contentWidth * MAP_ASPECT_RATIO). Reported a few times with
+    // settle delays (fonts/layout can shift slightly right after mount)
+    // then stopped for good — never a continuous loop, so it can't
+    // drift into a stale/wrong value like the old mechanism did.
+    function reportNaturalHeight() {
+      const aboveHeight = aboveMapRef.current?.offsetHeight || 0;
+      const contentWidth = containerRef.current?.offsetWidth;
+      if (!contentWidth) return;
+      const mapHeight = contentWidth * MAP_ASPECT_RATIO;
+      const total = Math.ceil(aboveHeight + mapHeight + 24); // +24: small buffer for border/padding
+      window.parent.postMessage({ type: "aloha-map-height", height: total }, "*");
     }
 
-    reportHeight();
-    const observer = new ResizeObserver(reportHeight);
-    observer.observe(document.body);
-    window.addEventListener("load", reportHeight);
-
-    // Safety net: async data (lot statuses, images) can change height without a resize
-    // event always firing in time — re-check for a while after mount. Aug 12 (per Mely):
-    // extended from 8s to 20s — on slower mobile connections, content can still be
-    // settling (fonts, images, async lot data) past the old window, which could lock
-    // in a too-tall height report. The embedding page just reserves whatever height
-    // it's told (overflow:hidden, doesn't auto-shrink), so a stale too-tall report
-    // shows up as dead blank space below the map — exactly what Mely saw on mobile.
-    const interval = setInterval(reportHeight, 500);
-    const stopSafetyNet = setTimeout(() => clearInterval(interval), 20000);
+    reportNaturalHeight();
+    const t1 = setTimeout(reportNaturalHeight, 300);
+    const t2 = setTimeout(reportNaturalHeight, 1000);
+    window.addEventListener("resize", reportNaturalHeight);
 
     return () => {
-      observer.disconnect();
-      window.removeEventListener("load", reportHeight);
-      clearInterval(interval);
-      clearTimeout(stopSafetyNet);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener("resize", reportNaturalHeight);
     };
   }, []);
 
@@ -1548,6 +1553,7 @@ export default function AlohaMap() {
       background:"#f0fdf4", fontFamily:"sans-serif",
     }}>
       <style>{emojiHoverStyle}</style>
+      <div ref={aboveMapRef}>
       {/* Header */}
       <div className="map-header" style={{ background:"linear-gradient(135deg,#14532d,#16a34a)", padding:"24px" }}>
         <div>
@@ -1568,6 +1574,7 @@ export default function AlohaMap() {
         <p style={{ color:"#166534", fontWeight:600, margin:0, fontSize:14 }}>
           Click any <span style={{ color:"#16a34a" }}>🟢 green</span> or <span style={{ color:"#ca8a04" }}>🟡 orange</span> lot to check availability and reserve it. Hover to see the lot number.
         </p>
+      </div>
       </div>
 
       {canEditMap && editMode && (
