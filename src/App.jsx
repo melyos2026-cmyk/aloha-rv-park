@@ -1295,6 +1295,15 @@ export default function AlohaMap() {
   const [emojis, setEmojis] = useState([]);
   const [lotShapes, setLotShapes] = useState({});
   const [dragging, setDragging] = useState(null);
+  // Aug 12 (per Mely): emoji edit-mode dragging now uses this SAME
+  // real-DOM-rect-based % computation as everything else (lots, guest
+  // emoji rendering) — replacing react-rnd's separate JS-pixel math for
+  // emojis, which could disagree with the guest CSS-% rendering in
+  // subtle ways (what looked centered while dragging didn't always
+  // match what guests actually saw). One single coordinate system now,
+  // used identically in both edit and guest mode — guaranteed WYSIWYG.
+  const [draggingEmoji, setDraggingEmoji] = useState(null);
+  const emojiDragOffsetRef = useRef({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [editorRole, setEditorRole] = useState(null); // null | 'master_admin' | 'park_admin'
   // master_admin: full editor (move/resize lots, everything below).
@@ -1647,6 +1656,13 @@ export default function AlohaMap() {
           }}
           onClick={() => setActiveEmoji(null)}
           onMouseMove={editMode ? (e) => {
+            if (draggingEmoji) {
+              const rect = containerRef.current.getBoundingClientRect();
+              const newX = Math.round(((e.clientX - rect.left) / rect.width * 100 - emojiDragOffsetRef.current.x) * 10) / 10;
+              const newY = Math.round(((e.clientY - rect.top) / rect.height * 100 - emojiDragOffsetRef.current.y) * 10) / 10;
+              setEmojis(prev => prev.map(em => em.id === draggingEmoji ? { ...em, x: newX, y: newY } : em));
+              return;
+            }
             if (!dragging) return;
             const rect = containerRef.current.getBoundingClientRect();
             const newX = Math.round(((e.clientX - rect.left) / rect.width * 100 - dragOffset.x) * 10) / 10;
@@ -1657,13 +1673,14 @@ export default function AlohaMap() {
             }));
           } : undefined}
           onMouseUp={editMode ? () => {
+            if (draggingEmoji) setDraggingEmoji(null);
             if (dragging) {
               const [x,y,w,h] = draftLots[dragging];
               console.log(`${dragging}: [${x}, ${y}, ${w}, ${h}],`);
               setDragging(null);
             }
           } : undefined}
-          onMouseLeave={editMode ? () => setDragging(null) : undefined}
+          onMouseLeave={editMode ? () => { setDragging(null); setDraggingEmoji(null); } : undefined}
         >
           <img
             src={MAP_IMG}
@@ -1907,93 +1924,75 @@ export default function AlohaMap() {
             }
 
             return (
-            <Rnd
-              key={item.id}
-              position={{ x: item.x / 100 * (scale.w || 900), y: item.y / 100 * (scale.h || (900 * MAP_ASPECT_RATIO)) }}
-              size={{ width: emojiSize + 8 * scaleFactor, height: emojiSize + 8 * scaleFactor }}
-              onDragStop={(e, d) => {
-                const nx = Math.round(d.x / (scale.w || 900) * 1000) / 10;
-                const ny = Math.round(d.y / (scale.h || (900 * MAP_ASPECT_RATIO)) * 1000) / 10;
-                setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, x: nx, y: ny } : em));
-              }}
-              enableResizing={false}
-              disableDragging={!(editMode || isInfoOnly)}
-              style={{ fontSize: emojiSize, display:"flex", alignItems:"center", justifyContent:"center", cursor: (editMode || isInfoOnly) ? "move" : "pointer", zIndex:100 }}
-            >
-              <span
-                onClick={e => { e.stopPropagation(); setActiveEmoji(activeEmoji === item.id ? null : item.id); }}
-                className="map-emoji-hover"
-                style={{ lineHeight:1, userSelect:"none", display:"inline-block", transition:"transform 0.15s, filter 0.15s" }}
-              >{item.emoji}</span>
+              <div
+                key={item.id}
+                style={{ position:"absolute", left:`${item.x}%`, top:`${item.y}%`, width:0, height:0, zIndex:100 }}
+              >
+                <span
+                  onMouseDown={e => {
+                    if (!(editMode || isInfoOnly)) return;
+                    e.stopPropagation();
+                    const rect = containerRef.current.getBoundingClientRect();
+                    emojiDragOffsetRef.current = {
+                      x: (e.clientX - rect.left) / rect.width * 100 - item.x,
+                      y: (e.clientY - rect.top) / rect.height * 100 - item.y,
+                      startX: e.clientX,
+                      startY: e.clientY,
+                      moved: false,
+                    };
+                    setDraggingEmoji(item.id);
+                  }}
+                  onClick={e => {
+                    e.stopPropagation();
+                    // Aug 12: distinguishes a click (open the popup editor)
+                    // from a drag (reposition) — only opens if the mouse
+                    // barely moved since mousedown.
+                    const d = emojiDragOffsetRef.current;
+                    if (d?.startX !== undefined) {
+                      const dist = Math.hypot(e.clientX - d.startX, e.clientY - d.startY);
+                      if (dist > 4) return;
+                    }
+                    setActiveEmoji(activeEmoji === item.id ? null : item.id);
+                  }}
+                  className="map-emoji-hover"
+                  style={{
+                    fontSize: emojiSize, lineHeight:1, userSelect:"none", display:"inline-block",
+                    position:"absolute", left:0, top:0, transform:"translate(-50%,-50%)",
+                    cursor: (editMode || isInfoOnly) ? "move" : "pointer",
+                    transition: draggingEmoji === item.id ? "none" : "transform 0.15s, filter 0.15s",
+                  }}
+                >{item.emoji}</span>
 
-              {(editMode || isInfoOnly) && activeEmoji === item.id && (
-                <div onClick={e => e.stopPropagation()} style={{ position:"absolute", bottom:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)", background:"#fff", border:"1.5px solid #d1d5db", borderRadius:10, padding:"10px 12px", minWidth:210, boxShadow:"0 4px 16px rgba(0,0,0,0.2)", zIndex:500, fontFamily:"sans-serif" }}>
-                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>POPUP TITLE</div>
-                  <input
-                    value={item.label || ""}
-                    onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, label: e.target.value } : em))}
-                    placeholder="e.g. Pool, Office..."
-                    style={{ width:"100%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, marginBottom:6, boxSizing:"border-box" }}
-                  />
-                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>POPUP INFO (one per line)</div>
-                  <textarea
-                    value={item.info || ""}
-                    onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, info: e.target.value } : em))}
-                    placeholder="Hours: 9am-9pm&#10;Rules: No running&#10;Price: Free"
-                    rows={3}
-                    style={{ width:"100%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, marginBottom:6, boxSizing:"border-box", resize:"vertical" }}
-                  />
-                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>SIZE: {rawSize}px</div>
-                  <input
-                    type="range" min="12" max="80" value={rawSize}
-                    onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, size: parseInt(e.target.value) } : em))}
-                    style={{ width:"100%", marginBottom:8 }}
-                  />
-                  <button
-                    onClick={() => { setEmojis(prev => prev.filter(em => em.id !== item.id)); setActiveEmoji(null); }}
-                    style={{ background:"#ef4444", color:"#fff", border:"none", borderRadius:6, padding:"5px 10px", cursor:"pointer", fontSize:12, width:"100%", fontWeight:600 }}
-                  >🗑 Delete</button>
-                </div>
-              )}
-
-              {!editMode && !isInfoOnly && activeEmoji === item.id && (item.label || item.info) && createPortal(
-                <div onClick={()=>setActiveEmoji(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1999, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-                  <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:20, padding:"24px 28px", minWidth:280, maxWidth:360, width:"100%", boxShadow:"0 24px 64px rgba(0,0,0,0.4)", fontFamily:"sans-serif", position:"relative" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                        <span style={{ fontSize:32 }}>{item.emoji}</span>
-                        <span style={{ fontSize:20, fontWeight:800, color:"#14532d", fontFamily:"Georgia,serif" }}>{item.label}</span>
-                      </div>
-                      <button onClick={()=>setActiveEmoji(null)} style={{ background:"#f3f4f6", border:"none", borderRadius:"50%", width:32, height:32, fontSize:16, cursor:"pointer", color:"#6b7280", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
-                    </div>
-                    {item.info && (
-                      <div style={{ background:"#f0fdf4", borderRadius:12, padding:"12px 16px", borderLeft:"4px solid #16a34a" }}>
-                        {item.info.split("\n").filter(l=>l.trim()).map((line, i) => (
-                          <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:10, marginBottom:14 }}>
-                            <span style={{ color:"#16a34a", fontWeight:700, fontSize:16, marginTop:1 }}>•</span>
-                            <p style={{ margin:0, fontSize:15, color:"#166534", fontWeight:500, lineHeight:1.6, fontFamily:"Georgia, serif", letterSpacing:"0.01em" }}>{line}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {item.emoji === "⛽" && item.label && (item.label.toLowerCase().includes("propane") || item.label.toLowerCase().includes("propano")) && (
-                      <div style={{ marginTop:16 }}>
-                        <button onClick={()=>{ setActiveEmoji(null); setPropaneModalLotId(String(item.id)); }}
-                          style={{ display:"block", width:"100%", background:"linear-gradient(135deg,#14532d,#16a34a)", color:"#fff", textAlign:"center", padding:"12px 20px", borderRadius:50, fontWeight:700, fontSize:15, fontFamily:"sans-serif", border:"none", cursor:"pointer", boxShadow:"0 4px 12px rgba(22,163,74,0.3)", marginBottom:10 }}>
-                          💳 Buy Propane
-                        </button>
-                        <a href="tel:6892520567" style={{ display:"block", background:"#f3f4f6", color:"#374151", textAlign:"center", padding:"10px 20px", borderRadius:50, fontWeight:700, fontSize:14, fontFamily:"sans-serif", textDecoration:"none", border:"1.5px solid #d1d5db" }}>
-                          📞 Questions: Call (689) 252-0567
-                        </a>
-                      </div>
-                    )}
-                    <div style={{ marginTop:16, textAlign:"center" }}>
-                      <div style={{ fontSize:11, color:"#9ca3af", fontFamily:"sans-serif" }}>🌺 Aloha RV Park · Kissimmee, FL</div>
-                    </div>
+                {(editMode || isInfoOnly) && activeEmoji === item.id && (
+                  <div onClick={e => e.stopPropagation()} style={{ position:"absolute", bottom:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)", background:"#fff", border:"1.5px solid #d1d5db", borderRadius:10, padding:"10px 12px", minWidth:210, boxShadow:"0 4px 16px rgba(0,0,0,0.2)", zIndex:500, fontFamily:"sans-serif" }}>
+                    <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>POPUP TITLE</div>
+                    <input
+                      value={item.label || ""}
+                      onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, label: e.target.value } : em))}
+                      placeholder="e.g. Pool, Office..."
+                      style={{ width:"100%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, marginBottom:6, boxSizing:"border-box" }}
+                    />
+                    <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>POPUP INFO (one per line)</div>
+                    <textarea
+                      value={item.info || ""}
+                      onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, info: e.target.value } : em))}
+                      placeholder="Hours: 9am-9pm&#10;Rules: No running&#10;Price: Free"
+                      rows={3}
+                      style={{ width:"100%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, marginBottom:6, boxSizing:"border-box", resize:"vertical" }}
+                    />
+                    <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>SIZE: {rawSize}px</div>
+                    <input
+                      type="range" min="12" max="80" value={rawSize}
+                      onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, size: parseInt(e.target.value) } : em))}
+                      style={{ width:"100%", marginBottom:8 }}
+                    />
+                    <button
+                      onClick={() => { setEmojis(prev => prev.filter(em => em.id !== item.id)); setActiveEmoji(null); }}
+                      style={{ background:"#ef4444", color:"#fff", border:"none", borderRadius:6, padding:"5px 10px", cursor:"pointer", fontSize:12, width:"100%", fontWeight:600 }}
+                    >🗑 Delete</button>
                   </div>
-                </div>
-              , document.body)}
-            </Rnd>
+                )}
+              </div>
             );
           })}
 
