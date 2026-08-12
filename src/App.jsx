@@ -835,8 +835,17 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           // doesn't necessarily show up in bookedRanges at all.
           if (status !== "reserved" || loadingAvailability) return null;
           let candidate;
+          let noKnownEndDate = false;
           if (reservedUntil) {
             candidate = new Date(reservedUntil + "T00:00:00");
+            // Aug 12 (per Mely): a far-future date (e.g. 2099) usually
+            // means the lot was marked Reserved without a real end date
+            // specified — showing that literal date to a guest looks
+            // broken. Treat anything more than 3 years out as "no known
+            // end date" instead.
+            const threeYearsOut = new Date();
+            threeYearsOut.setFullYear(threeYearsOut.getFullYear() + 3);
+            if (candidate > threeYearsOut) noKnownEndDate = true;
           } else {
             candidate = new Date();
             candidate.setHours(0, 0, 0, 0);
@@ -852,6 +861,15 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
                 }
               }
             }
+          }
+          if (noKnownEndDate) {
+            return (
+              <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"10px 12px", marginBottom:12, fontFamily:"sans-serif" }}>
+                <span style={{ fontSize:12.5, color:"#166534" }}>
+                  This lot is currently reserved with no set end date — please contact the office to check availability.
+                </span>
+              </div>
+            );
           }
           const label = candidate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
           const isoDate = candidate.toISOString().split("T")[0];
