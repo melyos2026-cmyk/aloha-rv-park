@@ -38,13 +38,30 @@ async function getCompanyId() {
 
 async function saveToSupabase(type, key, data) {
   const companyId = await getCompanyId();
-  const res = await fetch(SUPABASE_URL + '/rest/v1/map_elements?on_conflict=park_id,element_type,element_key', {
+  // Aug 12 (per Mely — "coordinates keep reverting after refresh"):
+  // explicitly delete any existing row(s) for this exact park/type/key
+  // BEFORE inserting the new one, instead of relying on the on_conflict
+  // upsert alone. If that upsert's underlying unique constraint was ever
+  // missing/broken in the database, every save would silently create a
+  // NEW duplicate row instead of updating the existing one — and a
+  // reload could then load an OLDER row instead of the latest save,
+  // which matches exactly what was observed (typed values reverting to
+  // something close-but-not-quite-what-was-just-saved). This delete+
+  // insert pattern guarantees exactly one row always exists regardless
+  // of whether that constraint is actually working.
+  await fetch(
+    SUPABASE_URL + '/rest/v1/map_elements?park_id=eq.' + PARK_ID + '&element_type=eq.' + type + '&element_key=eq.' + key,
+    {
+      method: 'DELETE',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+    }
+  );
+  const res = await fetch(SUPABASE_URL + '/rest/v1/map_elements', {
     method: 'POST',
     headers: {
       'apikey': SUPABASE_KEY,
       'Authorization': 'Bearer ' + SUPABASE_KEY,
       'Content-Type': 'application/json',
-      'Prefer': 'resolution=merge-duplicates'
     },
     body: JSON.stringify({ park_id: PARK_ID, company_id: companyId, element_type: type, element_key: key, data })
   });
@@ -177,7 +194,7 @@ async function loadParkSettings() {
 }
 
 async function loadFromSupabase(type) {
-  const res = await fetch(SUPABASE_URL + '/rest/v1/map_elements?park_id=eq.' + PARK_ID + '&element_type=eq.' + type, {
+  const res = await fetch(SUPABASE_URL + '/rest/v1/map_elements?park_id=eq.' + PARK_ID + '&element_type=eq.' + type + '&order=id.desc', {
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
   });
   return res.ok ? await res.json() : [];
