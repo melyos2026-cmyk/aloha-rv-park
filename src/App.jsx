@@ -948,6 +948,49 @@ function MyReservationsModal({ parkSettings, onClose }) {
     return Math.round((target - today) / 86400000);
   }
 
+  // Aug 12 (per Mely): consolidated from 2 separate buttons ("Save Lot
+  // Info" + "Save Changes") into one — this runs first inside whichever
+  // single save button is showing, so one click saves everything instead
+  // of needing both.
+  async function saveActiveLotInfo() {
+    if (!activeEditLot) return;
+    const info = lotInfo[activeEditLot] || {};
+    if (activeEditLot.startsWith("S")) {
+      await saveLotInfo(PARK_ID, activeEditLot, {
+        lot_type: info.lot_type || "outdoor",
+        size: info.size || "",
+        has_electricity: info.has_electricity || false,
+        amperage: info.has_electricity ? (info.amperage || 30) : null,
+        price_daily: info.price_daily || 10,
+        price_monthly: info.price_monthly || 100,
+        price_yearly: info.price_yearly || null,
+        description: info.description || ""
+      });
+    } else {
+      await saveLotInfo(PARK_ID, activeEditLot, {
+        price_yearly: info.price_yearly || null
+      });
+      await fetch('/api/set-lot-pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parkId: PARK_ID,
+          lotName: activeEditLot,
+          basePrice: info.base_price,
+          highSeasonPrice: info.high_season_price,
+          lowSeasonPrice: info.low_season_price,
+          dailyRate: info.price_daily,
+          weeklyRate: info.price_weekly,
+          maxLengthFt: info.max_length_ft,
+          ampService: info.amp_service,
+          maxDriverSlideOuts: info.max_driver_slide_outs,
+          maxPassengerSlideOuts: info.max_passenger_slide_outs,
+          description: info.description,
+        }),
+      });
+    }
+  }
+
   async function handleCancel(orderId) {
     if (!window.confirm("Cancel this reservation and request a refund?")) return;
     setCancellingId(orderId);
@@ -2008,22 +2051,6 @@ export default function AlohaMap() {
                         placeholder="e.g. Covered spot, near entrance..."
                         style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box", resize:"vertical", minHeight:60 }} />
                     </div>
-                    <button onClick={async ()=>{
-                      const info = lotInfo[activeEditLot] || {};
-                      await saveLotInfo(PARK_ID, activeEditLot, {
-                        lot_type: info.lot_type || "outdoor",
-                        size: info.size || "",
-                        has_electricity: info.has_electricity || false,
-                        amperage: info.has_electricity ? (info.amperage || 30) : null,
-                        price_daily: info.price_daily || 10,
-                        price_monthly: info.price_monthly || 100,
-                        price_yearly: info.price_yearly || null,
-                        description: info.description || ""
-                      });
-                      alert("Lot info saved!");
-                    }} style={{ marginTop:8, background:"#16a34a", color:"#fff", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600, width:"100%" }}>
-                      Save Lot Info
-                    </button>
                   </>
                 ) : (
                   <>
@@ -2168,43 +2195,6 @@ export default function AlohaMap() {
                       {photoUploadError && <p style={{ fontSize:11, color:"#dc2626", marginTop:4 }}>{photoUploadError}</p>}
                       <p style={{ fontSize:10, color:"#9ca3af", marginTop:4 }}>If no photo is added, guests just see the info above — no image is shown.</p>
                     </div>
-                    <button onClick={async ()=>{
-                      const info = lotInfo[activeEditLot] || {};
-                      await saveLotInfo(PARK_ID, activeEditLot, {
-                        price_yearly: info.price_yearly || null
-                      });
-                      // Real lot specs guests actually see (max RV length,
-                      // amperage) and real pricing (base/high/low season,
-                      // daily/weekly rate) live in rv_lots, the same table
-                      // admin.aloharvparkfl.com's "Lots & Seasonal Pricing"
-                      // screen manages — save them there directly instead of
-                      // the old disconnected lot_info fields nobody reads.
-                      // Aug 8 (per Mely): description moved here too, same
-                      // reasoning — it was only ever saved to the old
-                      // lot_info table before, disconnected from everything
-                      // guests actually see.
-                      await fetch('/api/set-lot-pricing', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          parkId: PARK_ID,
-                          lotName: activeEditLot,
-                          basePrice: info.base_price,
-                          highSeasonPrice: info.high_season_price,
-                          lowSeasonPrice: info.low_season_price,
-                          dailyRate: info.price_daily,
-                          weeklyRate: info.price_weekly,
-                          maxLengthFt: info.max_length_ft,
-                          ampService: info.amp_service,
-                          maxDriverSlideOuts: info.max_driver_slide_outs,
-                          maxPassengerSlideOuts: info.max_passenger_slide_outs,
-                          description: info.description,
-                        }),
-                      });
-                      alert("Lot info saved!");
-                    }} style={{ marginTop:8, background:"#16a34a", color:"#fff", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600, width:"100%" }}>
-                      Save Lot Info
-                    </button>
                   </>
                 )}
               </div>
@@ -2222,6 +2212,7 @@ export default function AlohaMap() {
           {isAdmin && (
           <button onClick={async ()=>{
             try {
+              await saveActiveLotInfo();
               // Guardar emojis y shapes en Supabase
               await saveToSupabase('emojis', 'all', emojis);
               await saveToSupabase('shapes', 'all', lotShapes);
@@ -2262,6 +2253,7 @@ export default function AlohaMap() {
           {isRestrictedEditor && (
           <button onClick={async ()=>{
             try {
+              await saveActiveLotInfo();
               await saveToSupabase('emojis', 'all', emojis);
               await saveToSupabase('lotColors', 'all', lotColors);
               alert("Changes saved!");
