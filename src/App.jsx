@@ -1136,6 +1136,99 @@ export default function AlohaMap() {
   const containerRef = useRef(null);
   const [previewWidth, setPreviewWidth] = useState(null); // null = actual device width; 900/390 = forced preview
   const [zoomLevel, setZoomLevel] = useState(1);
+  // Aug 12 (per Mely): real Pan & Zoom for the guest-facing map — separate
+  // from the admin-only preview zoom above. Uses a CSS transform (works on
+  // all browsers/mobile, unlike the CSS `zoom` property used for the admin
+  // preview control). getBoundingClientRect() already accounts for this
+  // transform automatically, so existing click/drag position math (lot
+  // hotspots, admin edit dragging) keeps working correctly without changes.
+  const [mapScale, setMapScale] = useState(1);
+  const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const pinchStartRef = useRef(null);
+  const MIN_MAP_SCALE = 1;
+  const MAX_MAP_SCALE = 4;
+
+  function clampPan(pan, scaleValue) {
+    // Aug 12: keeps the map from being dragged so far that you lose it —
+    // the more you're zoomed in, the further you're allowed to pan.
+    const maxOffset = (scaleValue - 1) * 400;
+    return {
+      x: Math.max(-maxOffset, Math.min(maxOffset, pan.x)),
+      y: Math.max(-maxOffset, Math.min(maxOffset, pan.y)),
+    };
+  }
+
+  function zoomBy(delta, center) {
+    setMapScale(prev => {
+      const next = Math.max(MIN_MAP_SCALE, Math.min(MAX_MAP_SCALE, Math.round((prev + delta) * 100) / 100));
+      if (next === MIN_MAP_SCALE) setMapPan({ x: 0, y: 0 });
+      return next;
+    });
+  }
+
+  function handleMapWheel(e) {
+    if (editMode) return; // don't fight with admin lot-dragging
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? 0.15 : -0.15);
+  }
+
+  function handlePanMouseDown(e) {
+    if (editMode || mapScale <= MIN_MAP_SCALE) return;
+    setIsPanning(true);
+    panStartRef.current = { x: e.clientX, y: e.clientY, panX: mapPan.x, panY: mapPan.y };
+  }
+
+  function handlePanMouseMove(e) {
+    if (!isPanning) return;
+    const dx = e.clientX - panStartRef.current.x;
+    const dy = e.clientY - panStartRef.current.y;
+    setMapPan(clampPan({ x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy }, mapScale));
+  }
+
+  function handlePanMouseUp() {
+    setIsPanning(false);
+  }
+
+  function touchDistance(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function handleMapTouchStart(e) {
+    if (editMode) return;
+    if (e.touches.length === 2) {
+      pinchStartRef.current = { dist: touchDistance(e.touches), scale: mapScale };
+    } else if (e.touches.length === 1 && mapScale > MIN_MAP_SCALE) {
+      setIsPanning(true);
+      panStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, panX: mapPan.x, panY: mapPan.y };
+    }
+  }
+
+  function handleMapTouchMove(e) {
+    if (editMode) return;
+    if (e.touches.length === 2 && pinchStartRef.current) {
+      e.preventDefault();
+      const newDist = touchDistance(e.touches);
+      const next = Math.max(
+        MIN_MAP_SCALE,
+        Math.min(MAX_MAP_SCALE, Math.round((pinchStartRef.current.scale * (newDist / pinchStartRef.current.dist)) * 100) / 100)
+      );
+      setMapScale(next);
+    } else if (e.touches.length === 1 && isPanning) {
+      const dx = e.touches[0].clientX - panStartRef.current.x;
+      const dy = e.touches[0].clientY - panStartRef.current.y;
+      setMapPan(clampPan({ x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy }, mapScale));
+    }
+  }
+
+  function handleMapTouchEnd(e) {
+    if (e.touches.length < 2) pinchStartRef.current = null;
+    if (e.touches.length === 0) setIsPanning(false);
+  }
+
   const [scale, setScale] = useState({ w: 900, h: 900 * MAP_ASPECT_RATIO });
   const scaleFactor = (scale.w || 900) / 900;
   const [draftLots, setDraftLots] = useState(LOTS);
@@ -1407,6 +1500,35 @@ export default function AlohaMap() {
         </p>
       </div>
 
+      {!editMode && (
+        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:8, padding:"10px 16px 0" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, background:"#f3f4f6", borderRadius:8, padding:"4px 6px" }}>
+            <button
+              onClick={() => zoomBy(-0.5)}
+              disabled={mapScale <= MIN_MAP_SCALE}
+              style={{ background:"#fff", border:"none", width:30, height:30, borderRadius:6, cursor: mapScale <= MIN_MAP_SCALE ? "default" : "pointer", fontSize:18, fontWeight:700, color: mapScale <= MIN_MAP_SCALE ? "#d1d5db" : "#374151" }}
+            >－</button>
+            <span style={{ fontSize:12, fontWeight:700, color:"#374151", minWidth:44, textAlign:"center" }}>{Math.round(mapScale * 100)}%</span>
+            <button
+              onClick={() => zoomBy(0.5)}
+              disabled={mapScale >= MAX_MAP_SCALE}
+              style={{ background:"#fff", border:"none", width:30, height:30, borderRadius:6, cursor: mapScale >= MAX_MAP_SCALE ? "default" : "pointer", fontSize:18, fontWeight:700, color: mapScale >= MAX_MAP_SCALE ? "#d1d5db" : "#374151" }}
+            >＋</button>
+          </div>
+          {mapScale > MIN_MAP_SCALE && (
+            <button
+              onClick={() => { setMapScale(1); setMapPan({ x: 0, y: 0 }); }}
+              style={{ background:"#f3f4f6", border:"none", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:700, color:"#374151" }}
+            >
+              Reset View
+            </button>
+          )}
+          {mapScale > MIN_MAP_SCALE && (
+            <span style={{ fontSize:11, color:"#9ca3af" }}>Drag to explore</span>
+          )}
+        </div>
+      )}
+
       {canEditMap && editMode && (
         <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", alignItems:"center", gap:8, padding:"12px 16px 0" }}>
           <button
@@ -1444,8 +1566,31 @@ export default function AlohaMap() {
       {/* Map Container */}
       <div style={{ padding:16, display:"flex", justifyContent:"center", zoom: zoomLevel }}>
         <div
+          style={{
+            overflow: "hidden",
+            width: "100%",
+            maxWidth: previewWidth || 900,
+            touchAction: !editMode && mapScale > MIN_MAP_SCALE ? "none" : "auto",
+            cursor: isPanning ? "grabbing" : (!editMode && mapScale > MIN_MAP_SCALE ? "grab" : "default"),
+          }}
+          onWheel={handleMapWheel}
+          onMouseDown={handlePanMouseDown}
+          onMouseMove={handlePanMouseMove}
+          onMouseUp={handlePanMouseUp}
+          onMouseLeave={handlePanMouseUp}
+          onTouchStart={handleMapTouchStart}
+          onTouchMove={handleMapTouchMove}
+          onTouchEnd={handleMapTouchEnd}
+        >
+        <div
           ref={containerRef}
-          style={{ position:"relative", width:"100%", maxWidth:previewWidth || 900, display:"inline-block", userSelect:"none", ...(previewWidth ? { border:"3px solid #166534", borderRadius:12, boxShadow:"0 4px 20px rgba(0,0,0,0.15)" } : {}) }}
+          style={{
+            position:"relative", width:"100%", display:"inline-block", userSelect:"none",
+            ...(previewWidth ? { border:"3px solid #166534", borderRadius:12, boxShadow:"0 4px 20px rgba(0,0,0,0.15)" } : {}),
+            transform: `translate(${mapPan.x}px, ${mapPan.y}px) scale(${mapScale})`,
+            transformOrigin: "center center",
+            transition: isPanning ? "none" : "transform 0.15s ease-out",
+          }}
           onClick={() => setActiveEmoji(null)}
           onMouseMove={editMode ? (e) => {
             if (!dragging) return;
@@ -1718,6 +1863,7 @@ export default function AlohaMap() {
             );
           })}
 
+        </div>
         </div>
       </div>
 
