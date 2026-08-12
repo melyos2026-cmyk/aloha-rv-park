@@ -1659,6 +1659,11 @@ export default function AlohaMap() {
           onClick={() => setActiveEmoji(null)}
           onMouseMove={editMode ? (e) => {
             if (draggingEmoji) {
+              const d = emojiDragOffsetRef.current;
+              if (d.startX !== undefined) {
+                const dist = Math.hypot(e.clientX - d.startX, e.clientY - d.startY);
+                if (dist <= 4) return; // Aug 12: ignore tiny/accidental movement (e.g. a click) — only real dragging repositions
+              }
               const rect = containerRef.current.getBoundingClientRect();
               const newX = Math.round(((e.clientX - rect.left) / rect.width * 100 - emojiDragOffsetRef.current.x) * 10) / 10;
               const newY = Math.round(((e.clientY - rect.top) / rect.height * 100 - emojiDragOffsetRef.current.y) * 10) / 10;
