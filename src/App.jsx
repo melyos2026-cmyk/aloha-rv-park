@@ -38,33 +38,23 @@ async function getCompanyId() {
 
 async function saveToSupabase(type, key, data) {
   const companyId = await getCompanyId();
-  // Aug 12 (per Mely — "coordinates keep reverting after refresh"):
-  // explicitly delete any existing row(s) for this exact park/type/key
-  // BEFORE inserting the new one, instead of relying on the on_conflict
-  // upsert alone. If that upsert's underlying unique constraint was ever
-  // missing/broken in the database, every save would silently create a
-  // NEW duplicate row instead of updating the existing one — and a
-  // reload could then load an OLDER row instead of the latest save,
-  // which matches exactly what was observed (typed values reverting to
-  // something close-but-not-quite-what-was-just-saved). This delete+
-  // insert pattern guarantees exactly one row always exists regardless
-  // of whether that constraint is actually working.
-  await fetch(
-    SUPABASE_URL + '/rest/v1/map_elements?park_id=eq.' + PARK_ID + '&element_type=eq.' + type + '&element_key=eq.' + key,
-    {
-      method: 'DELETE',
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
-    }
-  );
-  const res = await fetch(SUPABASE_URL + '/rest/v1/map_elements', {
+  // Aug 12 (per Mely — "coordinates keep reverting after refresh"): was
+  // writing directly to map_elements with the public anon key
+  // (VITE_SUPABASE_KEY) from the browser — the exact same pattern that
+  // caused silent failures on many other tables throughout this whole
+  // project (RLS quietly blocking anon-key writes, fetch still
+  // resolves with no thrown error). Routed through a new Service-Role-
+  // Key server route instead, which bypasses RLS entirely and actually
+  // surfaces an error if something fails.
+  const res = await fetch('/api/save-map-element', {
     method: 'POST',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ park_id: PARK_ID, company_id: companyId, element_type: type, element_key: key, data })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ parkId: PARK_ID, companyId, type, key, data }),
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    console.error('saveToSupabase failed:', type, err);
+  }
   return res.ok;
 }
 
@@ -194,9 +184,7 @@ async function loadParkSettings() {
 }
 
 async function loadFromSupabase(type) {
-  const res = await fetch(SUPABASE_URL + '/rest/v1/map_elements?park_id=eq.' + PARK_ID + '&element_type=eq.' + type + '&order=id.desc', {
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-  });
+  const res = await fetch('/api/save-map-element?parkId=' + encodeURIComponent(PARK_ID) + '&type=' + encodeURIComponent(type));
   return res.ok ? await res.json() : [];
 }
 
@@ -2546,13 +2534,18 @@ export default function AlohaMap() {
             try {
               await saveActiveLotInfo(activeEditLot, lotInfo);
               // Guardar emojis y shapes en Supabase
-              await saveToSupabase('emojis', 'all', emojis);
-              await saveToSupabase('shapes', 'all', lotShapes);
-              await saveToSupabase('texts', 'all', texts);
-              await saveToSupabase('lotColors', 'all', lotColors);
-              await saveToSupabase('rotations', 'all', rotations);
-              await saveToSupabase('emojiRotations', 'all', emojiRotations);
-              await saveToSupabase('textRotations', 'all', textRotations);
+              const saveResults = await Promise.all([
+                saveToSupabase('emojis', 'all', emojis),
+                saveToSupabase('shapes', 'all', lotShapes),
+                saveToSupabase('texts', 'all', texts),
+                saveToSupabase('lotColors', 'all', lotColors),
+                saveToSupabase('rotations', 'all', rotations),
+                saveToSupabase('emojiRotations', 'all', emojiRotations),
+                saveToSupabase('textRotations', 'all', textRotations),
+              ]);
+              if (saveResults.some(ok => !ok)) {
+                throw new Error("One or more changes failed to save — check the browser console for details, or try again.");
+              }
 
               // Aug 12 (per Mely): only sync to GitHub when a lot's
               // position/size actually changed — most saves are just
