@@ -1226,9 +1226,14 @@ export default function AlohaMap() {
     window.addEventListener("load", reportHeight);
 
     // Safety net: async data (lot statuses, images) can change height without a resize
-    // event always firing in time — re-check for the first few seconds after mount.
+    // event always firing in time — re-check for a while after mount. Aug 12 (per Mely):
+    // extended from 8s to 20s — on slower mobile connections, content can still be
+    // settling (fonts, images, async lot data) past the old window, which could lock
+    // in a too-tall height report. The embedding page just reserves whatever height
+    // it's told (overflow:hidden, doesn't auto-shrink), so a stale too-tall report
+    // shows up as dead blank space below the map — exactly what Mely saw on mobile.
     const interval = setInterval(reportHeight, 500);
-    const stopSafetyNet = setTimeout(() => clearInterval(interval), 8000);
+    const stopSafetyNet = setTimeout(() => clearInterval(interval), 20000);
 
     return () => {
       observer.disconnect();
