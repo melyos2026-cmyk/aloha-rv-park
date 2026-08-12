@@ -2535,6 +2535,12 @@ export default function AlohaMap() {
               // Get current file SHA
               const fileRes = await fetch('/api/save-to-github');
               const fileData = await fileRes.json();
+              if (!fileRes.ok || !fileData.content) {
+                throw new Error(
+                  "Emoji/color/shape changes were saved, but lot coordinates could not sync to GitHub: " +
+                  (fileData.message || "unknown error — check GITHUB_TOKEN/GITHUB_REPO in Vercel.")
+                );
+              }
               const sha = fileData.sha;
               const currentContent = new TextDecoder("utf-8").decode(Uint8Array.from(atob(fileData.content.replace(/\n/g,"")), c => c.charCodeAt(0)));
               // Replace LOTS in file
