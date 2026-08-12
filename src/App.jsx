@@ -2208,12 +2208,14 @@ export default function AlohaMap() {
                   </>
                 )}
               </div>
-              <div style={{ background:"#f9fafb", borderRadius:8, padding:10, marginBottom:10 }}>
-                <div style={{ fontSize:12, color:"#6b7280", marginBottom:4 }}>Coordinates:</div>
-                <pre style={{ margin:0, fontSize:12, color:"#14532d", fontFamily:"monospace", userSelect:"all" }}>
-                  {activeEditLot + ": [" + draftLots[activeEditLot].map(n=>n.toFixed(1)).join(", ") + "],"}
-                </pre>
-              </div>
+              {isAdmin && (
+                <div style={{ background:"#f9fafb", borderRadius:8, padding:10, marginBottom:10 }}>
+                  <div style={{ fontSize:12, color:"#6b7280", marginBottom:4 }}>Coordinates:</div>
+                  <pre style={{ margin:0, fontSize:12, color:"#14532d", fontFamily:"monospace", userSelect:"all" }}>
+                    {activeEditLot + ": [" + draftLots[activeEditLot].map(n=>n.toFixed(1)).join(", ") + "],"}
+                  </pre>
+                </div>
+              )}
             </>
           )}
 
