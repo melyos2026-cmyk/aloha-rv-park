@@ -1147,13 +1147,54 @@ export default function AlohaMap() {
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const pinchStartRef = useRef(null);
-  const MIN_MAP_SCALE = 1;
+  const viewportRef = useRef(null);
+  // Aug 12 (per Mely): the whole map must be visible on load, on every
+  // device — mobile frames are much shorter than desktop, so a fixed
+  // "no zoom out past 100%" limit cropped the map on mobile (only
+  // showing down to ~C9). minScale is now computed from the ACTUAL
+  // available frame height vs. the map's real content height, so
+  // "fully zoomed out" always means "see the entire map", regardless of
+  // screen size. hasFitRef prevents this from fighting the visitor's
+  // own manual zoom/pan once they've touched the map.
+  const [minScale, setMinScale] = useState(1);
+  const hasFitRef = useRef(false);
+  const hasInteractedRef = useRef(false);
+
+  useEffect(() => {
+    function fitToFrame() {
+      if (hasInteractedRef.current) return;
+      const viewportEl = viewportRef.current;
+      const contentWidth = containerRef.current?.offsetWidth;
+      if (!viewportEl || !contentWidth) return;
+      const availableHeight = viewportEl.offsetHeight;
+      const naturalContentHeight = contentWidth * MAP_ASPECT_RATIO;
+      if (!availableHeight || !naturalContentHeight) return;
+      const fit = Math.min(1, Math.max(0.15, availableHeight / naturalContentHeight));
+      setMinScale(fit);
+      setMapScale(fit);
+      setMapPan({ x: 0, y: 0 });
+      hasFitRef.current = true;
+    }
+    fitToFrame();
+    window.addEventListener("resize", fitToFrame);
+    // Content/container can settle a moment after mount (fonts, image load) — re-check briefly.
+    const t1 = setTimeout(fitToFrame, 300);
+    const t2 = setTimeout(fitToFrame, 1000);
+    return () => {
+      window.removeEventListener("resize", fitToFrame);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
+
   const MAX_MAP_SCALE = 4;
 
   function clampPan(pan, scaleValue) {
     // Aug 12: keeps the map from being dragged so far that you lose it —
-    // the more you're zoomed in, the further you're allowed to pan.
-    const maxOffset = (scaleValue - 1) * 400;
+    // the more you're zoomed in past minScale (the "see everything"
+    // level), the further you're allowed to pan. At minScale itself, no
+    // panning is needed since the whole map is already visible.
+    const maxOffset = Math.max(0, scaleValue - minScale) * 400;
     return {
       x: Math.max(-maxOffset, Math.min(maxOffset, pan.x)),
       y: Math.max(-maxOffset, Math.min(maxOffset, pan.y)),
@@ -1161,9 +1202,10 @@ export default function AlohaMap() {
   }
 
   function zoomBy(delta, center) {
+    hasInteractedRef.current = true;
     setMapScale(prev => {
-      const next = Math.max(MIN_MAP_SCALE, Math.min(MAX_MAP_SCALE, Math.round((prev + delta) * 100) / 100));
-      if (next === MIN_MAP_SCALE) setMapPan({ x: 0, y: 0 });
+      const next = Math.max(minScale, Math.min(MAX_MAP_SCALE, Math.round((prev + delta) * 100) / 100));
+      if (next === minScale) setMapPan({ x: 0, y: 0 });
       return next;
     });
   }
@@ -1171,11 +1213,13 @@ export default function AlohaMap() {
   function handleMapWheel(e) {
     if (editMode) return; // don't fight with admin lot-dragging
     e.preventDefault();
+    hasInteractedRef.current = true;
     zoomBy(e.deltaY < 0 ? 0.15 : -0.15);
   }
 
   function handlePanMouseDown(e) {
-    if (editMode || mapScale <= MIN_MAP_SCALE) return;
+    if (editMode || mapScale <= minScale) return;
+    hasInteractedRef.current = true;
     setIsPanning(true);
     panStartRef.current = { x: e.clientX, y: e.clientY, panX: mapPan.x, panY: mapPan.y };
   }
@@ -1199,9 +1243,10 @@ export default function AlohaMap() {
 
   function handleMapTouchStart(e) {
     if (editMode) return;
+    hasInteractedRef.current = true;
     if (e.touches.length === 2) {
       pinchStartRef.current = { dist: touchDistance(e.touches), scale: mapScale };
-    } else if (e.touches.length === 1 && mapScale > MIN_MAP_SCALE) {
+    } else if (e.touches.length === 1 && mapScale > minScale) {
       setIsPanning(true);
       panStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, panX: mapPan.x, panY: mapPan.y };
     }
@@ -1213,7 +1258,7 @@ export default function AlohaMap() {
       e.preventDefault();
       const newDist = touchDistance(e.touches);
       const next = Math.max(
-        MIN_MAP_SCALE,
+        minScale,
         Math.min(MAX_MAP_SCALE, Math.round((pinchStartRef.current.scale * (newDist / pinchStartRef.current.dist)) * 100) / 100)
       );
       setMapScale(next);
@@ -1566,13 +1611,14 @@ export default function AlohaMap() {
         minHeight: window.self === window.top ? undefined : 0,
       }}>
         <div
+          ref={viewportRef}
           style={{
             overflow: "hidden",
             width: "100%",
             height: window.self === window.top ? undefined : "100%",
             maxWidth: previewWidth || 900,
-            touchAction: !editMode && mapScale > MIN_MAP_SCALE ? "none" : "auto",
-            cursor: isPanning ? "grabbing" : (!editMode && mapScale > MIN_MAP_SCALE ? "grab" : "default"),
+            touchAction: !editMode && mapScale > minScale ? "none" : "auto",
+            cursor: isPanning ? "grabbing" : (!editMode && mapScale > minScale ? "grab" : "default"),
           }}
           onWheel={handleMapWheel}
           onMouseDown={handlePanMouseDown}
