@@ -592,7 +592,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
               {listing.description && (
                 <div style={{ fontSize:12, color:"#6b7280", lineHeight:1.5, marginBottom:8 }}>{listing.description}</div>
               )}
-              <div style={{ display:"flex", gap:8 }}>
+              <div style={{ display:"flex", gap:8, marginBottom:8 }}>
                 <a href={`mailto:info@aloharvparkfl.com?subject=Inquiry: ${listing.title}`} style={{ display:"inline-block", background:"#7c3aed", color:"#fff", padding:"7px 14px", borderRadius:6, fontSize:12, fontWeight:700, textDecoration:"none" }}>
                   📩 Inquire Now
                 </a>
@@ -600,6 +600,13 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
                   📞 Call Us
                 </a>
               </div>
+              <a
+                href="https://aloharvparkfl.com/real-estate"
+                target="_top"
+                style={{ display:"block", textAlign:"center", fontSize:11.5, fontWeight:700, color:"#7c3aed", textDecoration:"underline" }}
+              >
+                🖼 View More Photos & Full Listing
+              </a>
             </div>
           </div>
         )}
