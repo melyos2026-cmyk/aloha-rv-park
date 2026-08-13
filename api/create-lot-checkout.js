@@ -109,12 +109,23 @@ export default async function handler(req, res) {
     // Check for overlapping paid reservations OR active resident leases on this lot
     const { data: lotRow, error: lotRowErr } = await supabase
       .from('rv_lots')
-      .select('id, max_length_ft, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, use_seasonal_pricing, weekly_high_season_price, weekly_low_season_price, daily_high_season_price, daily_low_season_price')
+      .select('id, status, max_length_ft, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, use_seasonal_pricing, weekly_high_season_price, weekly_low_season_price, daily_high_season_price, daily_low_season_price')
       .eq('lot_name', lotId)
       .single();
 
     if (lotRowErr || !lotRow) {
       return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    // Aug 13 (per Mely): "maintenance" and "for_sale" are manual statuses
+    // with no underlying reservation/lease row — the date-overlap check
+    // below (get_lot_blocked_ranges) has nothing to block against for
+    // these, so without this check a lot manually marked unavailable
+    // could still be fully booked and paid for online.
+    if (lotRow.status === 'maintenance' || lotRow.status === 'for_sale') {
+      return res.status(403).json({
+        error: 'This lot is not currently available for booking — please call the office.',
+      });
     }
 
     const rvLengthNum = Number(rvLength) || 0;
