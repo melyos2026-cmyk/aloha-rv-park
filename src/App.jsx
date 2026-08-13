@@ -871,6 +871,21 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
               }
             }
           }
+          // Aug 13 (per Mely — A5 is month-to-month, genuinely no known
+          // move-out date): a resident's indefinite active lease also
+          // blocks bookedRanges through a 2099 sentinel (same convention
+          // used by the get_lot_blocked_ranges database function), so
+          // even the real computed candidate can still land far in the
+          // future when there's truly no known end date yet. In that
+          // case there's nothing useful to suggest — hide the banner
+          // entirely rather than show a confusing date or a generic
+          // message. It'll show a real date automatically once the
+          // resident sets a move-out date in their portal (that updates
+          // resident_leases.lease_end, which feeds directly into both
+          // this calculation and the database function).
+          const threeYearsOutFinal = new Date();
+          threeYearsOutFinal.setFullYear(threeYearsOutFinal.getFullYear() + 3);
+          if (candidate > threeYearsOutFinal) return null;
           const label = candidate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
           const isoDate = candidate.toISOString().split("T")[0];
           return (
