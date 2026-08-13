@@ -2593,6 +2593,20 @@ export default function AlohaMap() {
                 throw new Error("One or more changes failed to save — check the browser console for details, or try again.");
               }
 
+              // Aug 13 (per Mely — diagnosing "coordinates revert after
+              // refresh" recurring even after yesterday's fixes):
+              // immediately re-fetch what's ACTUALLY stored right after
+              // saving, instead of needing a full page refresh to find
+              // out — turns this into something we can see in one click.
+              const verifyRes = await fetch('/api/save-map-element?parkId=' + encodeURIComponent(PARK_ID) + '&type=emojis');
+              const verifyRows = await verifyRes.json();
+              const verifyData = Array.isArray(verifyRows) && verifyRows[0] ? verifyRows[0].data : null;
+              console.log('VERIFY after save — rows returned:', verifyRows.length, 'newest row data:', verifyData);
+              alert(
+                "Changes saved! Verification: " + (verifyRows.length || 0) + " row(s) found for emojis.\n" +
+                (verifyData ? "First emoji in newest row: " + JSON.stringify(verifyData[0]) : "No data in newest row!")
+              );
+
               // Aug 12 (per Mely): only sync to GitHub when a lot's
               // position/size actually changed — most saves are just
               // emoji/color/text edits and never needed to touch GitHub
