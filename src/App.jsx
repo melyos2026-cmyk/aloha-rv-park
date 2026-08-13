@@ -601,7 +601,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
                 </a>
               </div>
               <a
-                href="https://aloharvparkfl.com/real-estate"
+                href={`https://aloharvparkfl.com/real-estate/${listing.id}`}
                 target="_top"
                 style={{ display:"block", textAlign:"left", fontSize:11.5, fontWeight:700, color:"#7c3aed", textDecoration:"underline" }}
               >
