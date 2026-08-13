@@ -603,9 +603,9 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
               <a
                 href="https://aloharvparkfl.com/real-estate"
                 target="_top"
-                style={{ display:"block", textAlign:"center", fontSize:11.5, fontWeight:700, color:"#7c3aed", textDecoration:"underline" }}
+                style={{ display:"block", textAlign:"left", fontSize:11.5, fontWeight:700, color:"#7c3aed", textDecoration:"underline" }}
               >
-                🖼 View More Photos & Full Listing
+                View More Photos & Full Listing
               </a>
             </div>
           </div>
