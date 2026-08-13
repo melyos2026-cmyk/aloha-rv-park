@@ -617,7 +617,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           <img src={lotInfo.photo_url} alt="Lot" style={{ width:"100%", maxHeight:220, objectFit:"cover", borderRadius:10, marginBottom:16 }} />
         )}
 
-        {(lotInfo?.max_length_ft || lotInfo?.amp_service || (lotInfo?.max_driver_slide_outs && lotInfo.max_driver_slide_outs !== "Any") || (lotInfo?.max_passenger_slide_outs && lotInfo.max_passenger_slide_outs !== "Any")) && (
+        {canBookStatus && (lotInfo?.max_length_ft || lotInfo?.amp_service || (lotInfo?.max_driver_slide_outs && lotInfo.max_driver_slide_outs !== "Any") || (lotInfo?.max_passenger_slide_outs && lotInfo.max_passenger_slide_outs !== "Any")) && (
           <div style={{ background:"#f9fafb", borderRadius:8, padding:"10px 12px", marginBottom:16, display:"flex", gap:16, fontFamily:"sans-serif", flexWrap:"wrap" }}>
             {lotInfo?.max_length_ft && (
               <div>
@@ -652,6 +652,14 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           </div>
         )}
 
+        {/* Aug 13 (per Mely): the RV Length / Slide-Outs form fields
+            below previously rendered unconditionally, regardless of
+            whether the lot can actually be booked — showing a confusing
+            RV booking form for e.g. a for_sale lot that already has a
+            house on it. Now gated behind the same canBookStatus check
+            the actual rates/calendar section already uses. */}
+        {canBookStatus && (
+        <>
         <div style={{ marginBottom:16 }}>
           <label style={{ fontSize:12, fontWeight:700, color:"#374151", display:"block", marginBottom:4, fontFamily:"sans-serif" }}>
             Your RV Length (ft){form.departure && (
@@ -735,6 +743,8 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
             </div>
           )}
         </div>
+        </>
+        )}
 
         {lotInfo?.description && (
           <div style={{ background:"#f0fdf4", borderRadius:8, padding:"8px 12px", marginBottom:16, fontSize:13, color:"#166534", fontFamily:"sans-serif" }}>
