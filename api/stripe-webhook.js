@@ -230,10 +230,18 @@ export default async function handler(req, res) {
           }
         }
 
-        // Long-term stays (monthly/yearly) become residents (occupied/red).
-        // Short-term stays (weekly/daily only) are just reserved (orange).
+        // Aug 14 (per Mely — "si el calendario muestra hoy verde, el mapa
+        // tiene que estar verde, y cuando llegue la reservación se marca
+        // naranja"): only flip the lot's color the instant a future-dated
+        // booking is paid if arrival is today or earlier — a booking for
+        // next week shouldn't turn the lot orange/red today while the
+        // calendar still correctly shows today as free. A future arrival
+        // is picked up by the new flip-arriving-reservations-to-reserved
+        // cron on the real arrival day instead (mirrors the existing
+        // lease move-in cron's same day-by-day behavior).
         const isLongTerm = isYearly === 'true' || parseInt(months, 10) > 0;
-        if (lotId) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (lotId && arrivalDate && arrivalDate <= todayStr) {
           await updateLotStatus(lotId, isLongTerm ? 'occupied' : 'reserved');
         }
 
