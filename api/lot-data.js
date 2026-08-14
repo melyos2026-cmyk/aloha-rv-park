@@ -137,6 +137,16 @@ async function getReservedDates(req, res) {
   return res.status(200).json(dates);
 }
 
+// Aug 14 (per Mely — "si el calendario ya tiene los días correctos, por
+// qué el color del lote no puede correr por el calendario?"): this used
+// to just read the stored rv_lots.status column, which only gets kept in
+// sync by the twice-daily arrival/departure crons — meaning the color
+// could lag up to several hours behind reality between cron runs. Now
+// computes live from the exact same data the calendar itself uses
+// (get_live_lot_statuses — reservations/leases covering TODAY), so the
+// map's color is never stale. online_booking_disabled still comes from
+// the stored rv_lots row (that's a pure admin setting, not calendar-
+// driven, so it's unaffected).
 async function getStatuses(req, res) {
   const parkId = req.query.park_id || 'aloha';
 
@@ -150,15 +160,26 @@ async function getStatuses(req, res) {
 
   const { data: lots, error: lotsErr } = await supabase
     .from('rv_lots')
-    .select('lot_name, status, online_booking_disabled')
+    .select('lot_name, online_booking_disabled')
     .eq('company_id', company.id);
 
   if (lotsErr) throw lotsErr;
 
+  const { data: liveStatuses, error: liveErr } = await supabase.rpc('get_live_lot_statuses', {
+    p_company_id: company.id,
+  });
+
+  if (liveErr) throw liveErr;
+
+  const liveByLotName = {};
+  (liveStatuses || []).forEach((row) => {
+    liveByLotName[row.lot_name] = row.live_status;
+  });
+
   const statuses = {};
   const bookingDisabled = {};
   (lots || []).forEach((l) => {
-    statuses[l.lot_name] = l.status || 'available';
+    statuses[l.lot_name] = liveByLotName[l.lot_name] || 'available';
     bookingDisabled[l.lot_name] = !!l.online_booking_disabled;
   });
 
