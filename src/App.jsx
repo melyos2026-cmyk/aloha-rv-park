@@ -144,6 +144,39 @@ async function ensureRealEstateListing(lotKey) {
   });
 }
 
+// Aug 14 (per Mely): a "For Rent" lot is always park-owned inventory —
+// residents can't put their own homes up for straight rental (only for
+// sale/rent-to-own via the resident-consignment flow), so seller_type is
+// hardcoded 'park' here, unlike the sale listing above which the admin
+// may later reassign to a resident seller from RealEstateModule.
+async function ensureRentListing(lotKey) {
+  const checkRes = await fetch(SUPABASE_URL + '/rest/v1/real_estate_listings?park_id=eq.' + PARK_ID + '&lot_key=eq.' + lotKey, {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+  });
+  const rows = await checkRes.json();
+  if (rows.length > 0) return; // already has a listing, don't overwrite
+
+  await fetch(SUPABASE_URL + '/rest/v1/real_estate_listings', {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify({
+      park_id: PARK_ID,
+      lot_key: lotKey,
+      type: 'rent',
+      seller_type: 'park',
+      category: 'Mini Home',
+      title: 'For Rent - Lot ' + lotKey,
+      price: 'TBD',
+      available: false
+    })
+  });
+}
+
 async function loadLotInfo(parkId) {
   const res = await fetch(SUPABASE_URL + '/rest/v1/lot_info?park_id=eq.' + parkId, {
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
@@ -302,6 +335,7 @@ const STATUS_COLORS = {
   reserved:    "rgba(234,179,8,0.72)",
   maintenance: "rgba(107,114,128,0.7)",
   for_sale:    "rgba(172,103,221,0.7)",
+  for_rent:    "rgba(139,92,246,0.7)",
 };
 
 const STATUS_SOLID = {
@@ -310,6 +344,7 @@ const STATUS_SOLID = {
   reserved:    "#ca8a04",
   maintenance: "#4b5563",
   for_sale:    "#ac67dd",
+  for_rent:    "#8b5cf6",
 };
 
 // Fallback statuses, only used for the instant before the real fetch
@@ -2321,10 +2356,11 @@ export default function AlohaMap() {
               <div style={{ marginBottom:12 }}>
                 <span style={{ fontSize:12, fontWeight:600, color:"#6b7280" }}>STATUS / COLOR</span>
                 <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
-                  {[["available","#16a34a","🟢 Available"],["occupied","#dc2626","🔴 Occupied"],["reserved","#ca8a04","🟡 Reserved"],["maintenance","#4b5563","⚫ Maintenance"],["for_sale","#ac67dd","🏠 For Sale"]].map(([s,c,label])=>(
+                  {[["available","#16a34a","🟢 Available"],["occupied","#dc2626","🔴 Occupied"],["reserved","#ca8a04","🟡 Reserved"],["maintenance","#4b5563","⚫ Maintenance"],["for_sale","#ac67dd","🏠 For Sale"],["for_rent","#8b5cf6","🔑 For Rent"]].map(([s,c,label])=>(
                     <button key={s} onClick={async ()=>{
                       setStatuses(prev=>({...prev,[activeEditLot]:s}));
                       if (s === "for_sale") ensureRealEstateListing(activeEditLot);
+                      if (s === "for_rent") ensureRentListing(activeEditLot);
                       // Write straight to rv_lots (the single source of truth
                       // shared with lease applications/reservations) so this
                       // manual change is immediately reflected everywhere,

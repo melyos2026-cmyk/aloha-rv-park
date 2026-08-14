@@ -5,7 +5,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const VALID_STATUSES = ['available', 'occupied', 'reserved', 'maintenance', 'for_sale'];
+const VALID_STATUSES = ['available', 'occupied', 'reserved', 'maintenance', 'for_sale', 'for_rent'];
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

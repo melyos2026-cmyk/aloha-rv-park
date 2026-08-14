@@ -122,7 +122,12 @@ export default async function handler(req, res) {
     // below (get_lot_blocked_ranges) has nothing to block against for
     // these, so without this check a lot manually marked unavailable
     // could still be fully booked and paid for online.
-    if (lotRow.status === 'maintenance' || lotRow.status === 'for_sale') {
+    // Aug 14 (per Mely): "for_rent" (park-owned casitas) is deliberately
+    // admin-mediated only — the admin books it in person through the
+    // internal Reservations tool and explains it's a casita because the
+    // park is full, so it's excluded from public self-service booking
+    // here the same way for_sale/maintenance already are.
+    if (lotRow.status === 'maintenance' || lotRow.status === 'for_sale' || lotRow.status === 'for_rent') {
       return res.status(403).json({
         error: 'This lot is not currently available for booking — please call the office.',
       });
