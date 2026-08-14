@@ -56,6 +56,69 @@ async function updateLotStatus(lotId, newStatus, parkId = 'aloha') {
   }
 }
 
+// Aug 14 (per Mely): gives a public self-service booking the same
+// `reservations` row a manually-entered phone booking gets, so it shows
+// up in the admin's internal Reservations screen (ID-photo reminder,
+// Edit/Cancel/Delete, everything) instead of only existing as a bare
+// lot_orders row nothing else in the admin UI reads. Best-effort and
+// idempotent — safe to call again on a Stripe webhook retry.
+async function createReservationFromPublicOrder({
+  lotId,
+  arrivalDate,
+  departureDate,
+  customerEmail,
+  customerName,
+  customerPhone,
+  stripeSessionId,
+  parkId = 'aloha',
+}) {
+  if (!lotId || !arrivalDate || !departureDate) return;
+
+  const { data: company, error: companyErr } = await supabase
+    .from('companies')
+    .select('id')
+    .eq('park_id', parkId)
+    .single();
+  if (companyErr || !company) return;
+
+  const { data: lot, error: lotErr } = await supabase
+    .from('rv_lots')
+    .select('id')
+    .eq('company_id', company.id)
+    .eq('lot_name', lotId)
+    .single();
+  if (lotErr || !lot) return;
+
+  const { data: order, error: orderErr } = await supabase
+    .from('lot_orders')
+    .select('id')
+    .eq('stripe_session_id', stripeSessionId)
+    .maybeSingle();
+  if (orderErr || !order) return;
+
+  // Skip if a reservation for this exact order already exists (webhook
+  // retries redeliver the same event more than once).
+  const { data: existing } = await supabase
+    .from('reservations')
+    .select('id')
+    .eq('lot_order_id', order.id)
+    .maybeSingle();
+  if (existing) return;
+
+  await supabase.from('reservations').insert({
+    company_id: company.id,
+    space_id: lot.id,
+    lot_order_id: order.id,
+    customer_name: customerName || 'Guest',
+    customer_email: customerEmail,
+    customer_phone: customerPhone,
+    arrival_date: arrivalDate,
+    departure_date: departureDate,
+    reservation_status: 'confirmed',
+    notes: 'Booked online (public map)',
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -172,6 +235,30 @@ export default async function handler(req, res) {
         const isLongTerm = isYearly === 'true' || parseInt(months, 10) > 0;
         if (lotId) {
           await updateLotStatus(lotId, isLongTerm ? 'occupied' : 'reserved');
+        }
+
+        // Aug 14 (per Mely — real gap found: public self-service bookings
+        // only ever wrote to lot_orders, never to `reservations`, so they
+        // never showed up in the admin's internal Reservations screen —
+        // no way to attach an ID photo at check-in the same way a manual
+        // phone booking now can. Mirrors what the admin's own manual
+        // Reservations tool creates, so both booking paths land in the
+        // same place and get the same "ID needed" check-in reminder.
+        try {
+          await createReservationFromPublicOrder({
+            lotId,
+            arrivalDate,
+            departureDate,
+            customerEmail: session.customer_details?.email || null,
+            customerName: session.customer_details?.name || null,
+            customerPhone: session.customer_details?.phone || null,
+            stripeSessionId: session.id,
+          });
+        } catch (reservationErr) {
+          // Never let this block the payment/lot_orders flow above, which
+          // already succeeded — a missing admin-visible reservation row is
+          // recoverable (can be added by hand), a broken payment isn't.
+          console.error('Error creating reservations row for public booking:', reservationErr);
         }
       } catch (err) {
         console.error('Error saving lot order:', err);
