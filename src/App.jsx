@@ -28,7 +28,16 @@ const PARK_ID = (typeof window !== "undefined" && new URLSearchParams(window.loc
 let cachedCompanyId = null;
 async function getCompanyId() {
   if (cachedCompanyId) return cachedCompanyId;
-  const res = await fetch(SUPABASE_URL + '/rest/v1/companies?park_id=eq.' + PARK_ID + '&select=id', {
+  // Aug 19 (per Mely — caught this live: "el mapa necesita supabase para
+  // los emoji, estas mirando eso sin que se rompa?"): this was a direct
+  // anon-key fetch to the raw companies table, which relied on the
+  // "Public can view company info" policy dropped earlier today (closing
+  // a real gap: EIN/business_license/account_number were exposed to
+  // anyone with the anon key). Pointed at the new public_company_profile
+  // VIEW instead — same "id" column, no sensitive fields exist in it at
+  // all, and PostgREST exposes views through the same REST endpoint
+  // shape as tables, so nothing else about this call needed to change.
+  const res = await fetch(SUPABASE_URL + '/rest/v1/public_company_profile?park_id=eq.' + PARK_ID + '&select=id', {
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
   });
   const rows = await res.json();
