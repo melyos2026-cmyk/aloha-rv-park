@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { checkEditToken } from './_editTokenAuth.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -6,12 +7,18 @@ const supabase = createClient(
 );
 
 // POST /api/set-lot-pricing
-// Body: { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService }
+// Body: { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService, token }
 // Writes straight to rv_lots — the same table admin.aloharvparkfl.com's
 // "Lots & Seasonal Pricing" screen manages, so editing pricing (and now
 // max RV length / amperage) from the map's edit mode and from that admin
 // screen stay in sync automatically (no separate lot_info fields involved,
 // which guests never actually see — that was the bug).
+//
+// Aug 19 (public-site audit): had ZERO auth check — anyone who found this
+// URL could change any lot's real price with no login at all. Now
+// requires a valid edit token (same one the map editor UI already uses
+// to decide whether to SHOW its editing controls — now also enforced
+// server-side, not just client-side).
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -19,10 +26,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService, photoUrl, maxDriverSlideOuts, maxPassengerSlideOuts, description } = req.body;
+    const { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService, photoUrl, maxDriverSlideOuts, maxPassengerSlideOuts, description, token } = req.body;
 
     if (!parkId || !lotName) {
       return res.status(400).json({ error: 'parkId and lotName are required.' });
+    }
+
+    const auth = await checkEditToken(token, parkId, supabase);
+    if (!auth.valid) {
+      return res.status(403).json({ error: 'Not authorized to edit this map.' });
     }
 
     const { data: company, error: companyErr } = await supabase

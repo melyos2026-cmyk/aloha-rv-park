@@ -45,7 +45,7 @@ async function getCompanyId() {
   return cachedCompanyId;
 }
 
-async function saveToSupabase(type, key, data) {
+async function saveToSupabase(type, key, data, token) {
   const companyId = await getCompanyId();
   // Aug 12 (per Mely — "coordinates keep reverting after refresh"): was
   // writing directly to map_elements with the public anon key
@@ -58,7 +58,7 @@ async function saveToSupabase(type, key, data) {
   const res = await fetch('/api/save-map-element', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ parkId: PARK_ID, companyId, type, key, data }),
+    body: JSON.stringify({ parkId: PARK_ID, companyId, type, key, data, token }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -67,16 +67,11 @@ async function saveToSupabase(type, key, data) {
   return res.ok;
 }
 
-async function saveLotInfo(parkId, lotKey, info) {
-  const res = await fetch(SUPABASE_URL + '/rest/v1/lot_info?on_conflict=park_id,lot_key', {
+async function saveLotInfo(parkId, lotKey, info, token) {
+  const res = await fetch('/api/save-lot-info', {
     method: 'POST',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': 'resolution=merge-duplicates'
-    },
-    body: JSON.stringify({ park_id: parkId, lot_key: lotKey, ...info })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ parkId, lotKey, info, token }),
   });
   return res.ok;
 }
@@ -87,7 +82,7 @@ async function saveLotInfo(parkId, lotKey, info) {
 // saves everything instead of needing both. Module-level (like
 // saveLotInfo above) rather than a closure inside AlohaMap, so it's not
 // tied to one component's scope.
-async function saveActiveLotInfo(activeEditLot, lotInfo) {
+async function saveActiveLotInfo(activeEditLot, lotInfo, token) {
   if (!activeEditLot) return;
   const info = lotInfo[activeEditLot] || {};
   if (activeEditLot.startsWith("S")) {
@@ -100,11 +95,11 @@ async function saveActiveLotInfo(activeEditLot, lotInfo) {
       price_monthly: info.price_monthly || 100,
       price_yearly: info.price_yearly || null,
       description: info.description || ""
-    });
+    }, token);
   } else {
     await saveLotInfo(PARK_ID, activeEditLot, {
       price_yearly: info.price_yearly || null
-    });
+    }, token);
     await fetch('/api/set-lot-pricing', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -121,35 +116,17 @@ async function saveActiveLotInfo(activeEditLot, lotInfo) {
         maxDriverSlideOuts: info.max_driver_slide_outs,
         maxPassengerSlideOuts: info.max_passenger_slide_outs,
         description: info.description,
+        token,
       }),
     });
   }
 }
 
-async function ensureRealEstateListing(lotKey) {
-  const checkRes = await fetch(SUPABASE_URL + '/rest/v1/real_estate_listings?park_id=eq.' + PARK_ID + '&lot_key=eq.' + lotKey, {
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-  });
-  const rows = await checkRes.json();
-  if (rows.length > 0) return; // already has a listing, don't overwrite
-
-  await fetch(SUPABASE_URL + '/rest/v1/real_estate_listings', {
+async function ensureRealEstateListing(lotKey, token) {
+  await fetch('/api/ensure-real-estate-listing', {
     method: 'POST',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal'
-    },
-    body: JSON.stringify({
-      park_id: PARK_ID,
-      lot_key: lotKey,
-      type: 'sale',
-      category: 'Mini Home',
-      title: 'New Listing - Lot ' + lotKey,
-      price: 'TBD',
-      available: false
-    })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ parkId: PARK_ID, lotKey, listingType: 'sale', token }),
   });
 }
 
@@ -158,54 +135,24 @@ async function ensureRealEstateListing(lotKey) {
 // sale/rent-to-own via the resident-consignment flow), so seller_type is
 // hardcoded 'park' here, unlike the sale listing above which the admin
 // may later reassign to a resident seller from RealEstateModule.
-async function ensureRentListing(lotKey) {
-  const checkRes = await fetch(SUPABASE_URL + '/rest/v1/real_estate_listings?park_id=eq.' + PARK_ID + '&lot_key=eq.' + lotKey, {
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-  });
-  const rows = await checkRes.json();
-  if (rows.length > 0) return; // already has a listing, don't overwrite
-
-  await fetch(SUPABASE_URL + '/rest/v1/real_estate_listings', {
+async function ensureRentListing(lotKey, token) {
+  await fetch('/api/ensure-real-estate-listing', {
     method: 'POST',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal'
-    },
-    body: JSON.stringify({
-      park_id: PARK_ID,
-      lot_key: lotKey,
-      type: 'rent',
-      seller_type: 'park',
-      category: 'Mini Home',
-      title: 'For Rent - Lot ' + lotKey,
-      price: 'TBD',
-      available: false
-    })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ parkId: PARK_ID, lotKey, listingType: 'rent', token }),
   });
 }
 
 async function loadLotInfo(parkId) {
-  const res = await fetch(SUPABASE_URL + '/rest/v1/lot_info?park_id=eq.' + parkId, {
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-  });
+  const res = await fetch('/api/lot-info?parkId=' + encodeURIComponent(parkId));
   if (!res.ok) return {};
-  const rows = await res.json();
-  const result = {};
-  rows.forEach(r => { result[r.lot_key] = r; });
-  return result;
+  return res.json();
 }
-async function saveParkSettings(settings) {
-  const res = await fetch(SUPABASE_URL + '/rest/v1/park_settings?on_conflict=id', {
+async function saveParkSettings(settings, token) {
+  const res = await fetch('/api/save-park-settings', {
     method: 'POST',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': 'resolution=merge-duplicates'
-    },
-    body: JSON.stringify({ id: 1, ...settings })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ parkId: PARK_ID, settings, token }),
   });
   return res.ok;
 }
@@ -1433,6 +1380,12 @@ export default function AlohaMap() {
   const emojiDragOffsetRef = useRef({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [editorRole, setEditorRole] = useState(null); // null | 'master_admin' | 'park_admin'
+  // Aug 19 (public-site audit): the raw token itself is now also kept in
+  // state (not just the resolved editorRole) so every write request below
+  // can include it — every map write endpoint used to accept writes from
+  // anyone with no login at all; they now all verify this same token
+  // server-side too.
+  const [editToken, setEditToken] = useState(null);
   // master_admin: full editor (move/resize lots, everything below).
   // park_admin: restricted — can only manage emoji (add/edit info/delete)
   // and change a lot's color, never move/resize lots or edit their info/price.
@@ -1469,8 +1422,14 @@ export default function AlohaMap() {
     }
     fetch(`/api/verify-edit-token?park_id=${PARK_ID}&token=${encodeURIComponent(token)}`)
       .then((res) => res.json())
-      .then((result) => setEditorRole(result.valid ? result.role : null))
-      .catch(() => setEditorRole(null));
+      .then((result) => {
+        setEditorRole(result.valid ? result.role : null);
+        setEditToken(result.valid ? token : null);
+      })
+      .catch(() => {
+        setEditorRole(null);
+        setEditToken(null);
+      });
   }, []);
 
   useEffect(() => {
@@ -2237,7 +2196,7 @@ export default function AlohaMap() {
                 style={{ width:"100%", padding:"8px 10px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
             </div>
             <button onClick={async ()=>{
-              await saveParkSettings(parkSettings);
+              await saveParkSettings(parkSettings, editToken);
               alert("Park settings saved!");
               setShowParkSettings(false);
             }} style={{ width:"100%", background:"#16a34a", color:"#fff", border:"none", padding:"10px", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:700 }}>
@@ -2274,7 +2233,7 @@ export default function AlohaMap() {
             </div>
           </div>
           <button onClick={async ()=>{
-            await saveToSupabase('emojis', 'all', emojis);
+            await saveToSupabase('emojis', 'all', emojis, editToken);
             alert("Saved!");
           }} style={{ width:"100%", background:"#8b5cf6", color:"#fff", border:"none", padding:"10px", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:700 }}>
             💾 Save Changes
@@ -2368,8 +2327,8 @@ export default function AlohaMap() {
                   {[["available","#16a34a","🟢 Available"],["occupied","#dc2626","🔴 Occupied"],["reserved","#ca8a04","🟡 Reserved"],["maintenance","#4b5563","⚫ Maintenance"],["for_sale","#ac67dd","🏠 For Sale"],["for_rent","#8b5cf6","🔑 For Rent"]].map(([s,c,label])=>(
                     <button key={s} onClick={async ()=>{
                       setStatuses(prev=>({...prev,[activeEditLot]:s}));
-                      if (s === "for_sale") ensureRealEstateListing(activeEditLot);
-                      if (s === "for_rent") ensureRentListing(activeEditLot);
+                      if (s === "for_sale") ensureRealEstateListing(activeEditLot, editToken);
+                      if (s === "for_rent") ensureRentListing(activeEditLot, editToken);
                       // Write straight to rv_lots (the single source of truth
                       // shared with lease applications/reservations) so this
                       // manual change is immediately reflected everywhere,
@@ -2378,7 +2337,7 @@ export default function AlohaMap() {
                         await fetch('/api/set-lot-status', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ lotName: activeEditLot, status: s, parkId: PARK_ID }),
+                          body: JSON.stringify({ lotName: activeEditLot, status: s, parkId: PARK_ID, token: editToken }),
                         });
                       } catch (err) {
                         console.error('Error saving lot status:', err);
@@ -2599,7 +2558,7 @@ export default function AlohaMap() {
                             await fetch('/api/set-lot-pricing', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ parkId: PARK_ID, lotName: activeEditLot, photoUrl: null }),
+                              body: JSON.stringify({ parkId: PARK_ID, lotName: activeEditLot, photoUrl: null, token: editToken }),
                             });
                           }} style={{ position:"absolute", top:4, right:4, background:"#dc2626", color:"#fff", border:"none", borderRadius:6, width:22, height:22, cursor:"pointer", fontSize:12, lineHeight:"22px", padding:0 }}>
                             ×
@@ -2622,7 +2581,7 @@ export default function AlohaMap() {
                             const res = await fetch('/api/upload-lot-photo', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ parkId: PARK_ID, lotName: activeEditLot, imageBase64, fileName: file.name }),
+                              body: JSON.stringify({ parkId: PARK_ID, lotName: activeEditLot, imageBase64, fileName: file.name, token: editToken }),
                             });
                             const result = await res.json();
                             if (!res.ok) throw new Error(result.error || 'Upload failed');
@@ -2655,16 +2614,16 @@ export default function AlohaMap() {
           {isAdmin && (
           <button onClick={async ()=>{
             try {
-              await saveActiveLotInfo(activeEditLot, lotInfo);
+              await saveActiveLotInfo(activeEditLot, lotInfo, editToken);
               // Guardar emojis y shapes en Supabase
               const saveResults = await Promise.all([
-                saveToSupabase('emojis', 'all', emojis),
-                saveToSupabase('shapes', 'all', lotShapes),
-                saveToSupabase('texts', 'all', texts),
-                saveToSupabase('lotColors', 'all', lotColors),
-                saveToSupabase('rotations', 'all', rotations),
-                saveToSupabase('emojiRotations', 'all', emojiRotations),
-                saveToSupabase('textRotations', 'all', textRotations),
+                saveToSupabase('emojis', 'all', emojis, editToken),
+                saveToSupabase('shapes', 'all', lotShapes, editToken),
+                saveToSupabase('texts', 'all', texts, editToken),
+                saveToSupabase('lotColors', 'all', lotColors, editToken),
+                saveToSupabase('rotations', 'all', rotations, editToken),
+                saveToSupabase('emojiRotations', 'all', emojiRotations, editToken),
+                saveToSupabase('textRotations', 'all', textRotations, editToken),
               ]);
               if (saveResults.some(ok => !ok)) {
                 throw new Error("One or more changes failed to save — check the browser console for details, or try again.");
@@ -2693,7 +2652,7 @@ export default function AlohaMap() {
               const lotsChanged = JSON.stringify(draftLots) !== JSON.stringify(LOTS);
               if (lotsChanged) {
                 // Get current file SHA
-                const fileRes = await fetch('/api/save-to-github');
+                const fileRes = await fetch('/api/save-to-github?parkId=' + encodeURIComponent(PARK_ID) + '&token=' + encodeURIComponent(editToken));
                 const fileData = await fileRes.json();
                 if (!fileRes.ok || !fileData.content) {
                   throw new Error(
@@ -2710,7 +2669,7 @@ export default function AlohaMap() {
                 const updateRes = await fetch('/api/save-to-github', {
                   method: "PUT",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ message: "Update lot coordinates from map editor", content: btoa(unescape(encodeURIComponent(newContent))), sha })
+                  body: JSON.stringify({ parkId: PARK_ID, token: editToken, message: "Update lot coordinates from map editor", content: btoa(unescape(encodeURIComponent(newContent))), sha })
                 });
                 if (!updateRes.ok) {
                   const err = await updateRes.json();
@@ -2729,9 +2688,9 @@ export default function AlohaMap() {
           {isRestrictedEditor && (
           <button onClick={async ()=>{
             try {
-              await saveActiveLotInfo(activeEditLot, lotInfo);
-              await saveToSupabase('emojis', 'all', emojis);
-              await saveToSupabase('lotColors', 'all', lotColors);
+              await saveActiveLotInfo(activeEditLot, lotInfo, editToken);
+              await saveToSupabase('emojis', 'all', emojis, editToken);
+              await saveToSupabase('lotColors', 'all', lotColors, editToken);
               alert("Changes saved!");
             } catch(e) {
               alert("⚠️ Error: " + e.message);

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { checkEditToken } from './_editTokenAuth.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -7,6 +8,8 @@ const supabase = createClient(
 
 const VALID_STATUSES = ['available', 'occupied', 'reserved', 'maintenance', 'for_sale', 'for_rent'];
 
+// Aug 19 (public-site audit): had ZERO auth check — now requires a valid
+// edit token, same fix pattern as set-lot-pricing.js.
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -14,13 +17,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { lotName, status, parkId } = req.body || {};
+    const { lotName, status, parkId, token } = req.body || {};
 
     if (!lotName || !status) {
       return res.status(400).json({ error: 'Missing lotName or status' });
     }
     if (!VALID_STATUSES.includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const auth = await checkEditToken(token, parkId || 'aloha', supabase);
+    if (!auth.valid) {
+      return res.status(403).json({ error: 'Not authorized to edit this map.' });
     }
 
     const { data: company, error: companyErr } = await supabase

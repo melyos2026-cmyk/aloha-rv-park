@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { checkEditToken } from './_editTokenAuth.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -6,11 +7,14 @@ const supabase = createClient(
 );
 
 // POST /api/upload-lot-photo
-// Body: { parkId, lotName, imageBase64, fileName }
+// Body: { parkId, lotName, imageBase64, fileName, token }
 // Aug 8 (per Mely): admin can optionally attach a photo per lot — if none
 // is set, the lot detail view just shows the text info, no broken image.
 // Reuses the 'company-assets' bucket, same one the admin's Company
 // Settings hero-carousel upload already uses.
+//
+// Aug 19 (public-site audit): had ZERO auth check — now requires a valid
+// edit token, same fix pattern as set-lot-pricing.js.
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -18,10 +22,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { parkId, lotName, imageBase64, fileName } = req.body;
+    const { parkId, lotName, imageBase64, fileName, token } = req.body;
 
     if (!parkId || !lotName || !imageBase64) {
       return res.status(400).json({ error: 'parkId, lotName, and imageBase64 are required.' });
+    }
+
+    const auth = await checkEditToken(token, parkId, supabase);
+    if (!auth.valid) {
+      return res.status(403).json({ error: 'Not authorized to edit this map.' });
     }
 
     const { data: company, error: companyErr } = await supabase

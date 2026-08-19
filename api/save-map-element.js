@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { checkEditToken } from "./_editTokenAuth.js";
 
 // Aug 12 (per Mely — "coordinates keep reverting after refresh"): the
 // browser was writing to map_elements directly with the public anon key
@@ -32,10 +33,22 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    const { parkId, companyId, type, key, data } = req.body;
+    // Aug 19 (public-site audit): had ZERO auth check on writes — anyone
+    // who found this URL could overwrite any park's lot statuses OR
+    // emojis with no login at all. GET (reading the current map state,
+    // including emojis) stays fully public/unauthenticated on purpose —
+    // the map itself is meant to be publicly viewable. Only writing now
+    // requires a valid edit token, same fix pattern as set-lot-pricing.js.
+    const { parkId, companyId, type, key, data, token } = req.body;
     if (!parkId || !type || !key) {
       return res.status(400).json({ error: "parkId, type, and key are required." });
     }
+
+    const auth = await checkEditToken(token, parkId, supabaseAdmin);
+    if (!auth.valid) {
+      return res.status(403).json({ error: "Not authorized to edit this map." });
+    }
+
     // Delete-then-insert: guarantees exactly one row always exists for
     // this park/type/key, regardless of whether an on_conflict unique
     // constraint actually exists in the database.
