@@ -112,6 +112,7 @@ async function saveActiveLotInfo(activeEditLot, lotInfo, token) {
         dailyRate: info.price_daily,
         weeklyRate: info.price_weekly,
         maxLengthFt: info.max_length_ft,
+        maxWidthFt: info.max_width_ft,
         ampService: info.amp_service,
         maxDriverSlideOuts: info.max_driver_slide_outs,
         maxPassengerSlideOuts: info.max_passenger_slide_outs,
@@ -2461,6 +2462,21 @@ export default function AlohaMap() {
                         <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max RV Length (ft)</label>
                         <input type="number" key={activeEditLot + "-max_length_ft"} defaultValue={lotInfo[activeEditLot]?.max_length_ft || lotInfo[activeEditLot]?.max_length || 45}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_length_ft:parseInt(e.target.value)}}))}
+                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
+                      </div>
+                      <div>
+                        {/* Aug 20 (per Mely — "no veo width no lo veo ahi?"):
+                            max_width_ft was already read/validated in the
+                            apply form (rvTooWide) and shown as plain info
+                            everywhere else, but this admin editor never had
+                            an input for it — meaning no lot could ever
+                            actually have a real value, so that validation
+                            could never fire in practice. Mirrors Max RV
+                            Length exactly. */}
+                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max RV Width (ft) — slide-outs extended</label>
+                        <input type="number" key={activeEditLot + "-max_width_ft"} defaultValue={lotInfo[activeEditLot]?.max_width_ft || ""}
+                          placeholder="e.g. 14"
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_width_ft:e.target.value ? parseInt(e.target.value) : null}}))}
                           style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
                       </div>
                       <div>

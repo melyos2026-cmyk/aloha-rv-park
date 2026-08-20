@@ -26,7 +26,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, ampService, photoUrl, maxDriverSlideOuts, maxPassengerSlideOuts, description, token } = req.body;
+    const { parkId, lotName, basePrice, highSeasonPrice, lowSeasonPrice, dailyRate, weeklyRate, maxLengthFt, maxWidthFt, ampService, photoUrl, maxDriverSlideOuts, maxPassengerSlideOuts, description, token } = req.body;
 
     if (!parkId || !lotName) {
       return res.status(400).json({ error: 'parkId and lotName are required.' });
@@ -54,6 +54,11 @@ export default async function handler(req, res) {
       daily_rate: dailyRate === '' || dailyRate == null ? null : Number(dailyRate),
       weekly_rate: weeklyRate === '' || weeklyRate == null ? null : Number(weeklyRate),
       max_length_ft: maxLengthFt === '' || maxLengthFt == null ? null : Number(maxLengthFt),
+      // Aug 20 (per Mely — "no veo width no lo veo ahi?"): max_width_ft
+      // was already read/validated on the apply form and shown to
+      // guests, but no editor anywhere ever wrote a real value for it —
+      // this table column existed with no way to actually set it.
+      max_width_ft: maxWidthFt === '' || maxWidthFt == null ? null : Number(maxWidthFt),
       amp_service: ampService === '' || ampService == null ? null : String(ampService),
     };
     // Aug 8 (per Mely): not every RV fits every lot — some lots can't
