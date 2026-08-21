@@ -378,10 +378,18 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
     fetch('/api/lot-data?type=availability&lotId=' + encodeURIComponent(lot))
       .then(res => res.json())
       .then(data => {
+        // TEMP DEBUG (Aug 21, per Mely — "todas las fechas estan
+        // abiertas" on the Arrival calendar despite the API correctly
+        // returning blocked ranges): investigating whether the frontend
+        // ever actually receives/applies this data.
+        console.log('[DEBUG availability]', lot, data);
         setBookedRanges(Array.isArray(data) ? data : []);
         setLoadingAvailability(false);
       })
-      .catch(() => setLoadingAvailability(false));
+      .catch((err) => {
+        console.log('[DEBUG availability] FETCH FAILED', lot, err);
+        setLoadingAvailability(false);
+      });
   }, [lot]);
 
   const excludeDateIntervals = bookedRanges.map(r => {
@@ -390,6 +398,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
     end.setDate(end.getDate() - 1); // checkout day itself is available for a new arrival
     return { start, end };
   });
+  console.log('[DEBUG excludeDateIntervals for Arrival]', excludeDateIntervals);
 
   // For the Departure calendar: shift the start forward by 1 day so that
   // the exact arrival_date of a blocked range (e.g. a resident's move-in day)
