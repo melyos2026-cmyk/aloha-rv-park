@@ -26,8 +26,9 @@ console.log("DEBUG all env:", import.meta.env);
 const PARK_ID_PROVIDED = typeof window !== "undefined" && !!new URLSearchParams(window.location.search).get("park_id");
 const PARK_ID = (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("park_id")) || 'aloha';
 let cachedCompanyId = null;
-async function getCompanyId() {
-  if (cachedCompanyId) return cachedCompanyId;
+let cachedCompanyProfile = null;
+async function getCompanyProfile() {
+  if (cachedCompanyProfile) return cachedCompanyProfile;
   // Aug 19 (per Mely — caught this live: "el mapa necesita supabase para
   // los emoji, estas mirando eso sin que se rompa?"): this was a direct
   // anon-key fetch to the raw companies table, which relied on the
@@ -37,12 +38,27 @@ async function getCompanyId() {
   // VIEW instead — same "id" column, no sensitive fields exist in it at
   // all, and PostgREST exposes views through the same REST endpoint
   // shape as tables, so nothing else about this call needed to change.
-  const res = await fetch(SUPABASE_URL + '/rest/v1/public_company_profile?park_id=eq.' + PARK_ID + '&select=id', {
+  //
+  // Sep 21 (per Mely — building a second demo company, "Sunset Ridge",
+  // found live: several UI strings on this map hardcoded "Aloha RV
+  // Park" and its real street address, so a second company's map showed
+  // Aloha's own branding). Expanded the select to also pull
+  // company_name/address, cached alongside the id, so every hardcoded
+  // "Aloha RV Park" mention below can use the real per-company values
+  // instead — Aloha's own map is unaffected since its real name/address
+  // are exactly what's already been showing.
+  const res = await fetch(SUPABASE_URL + '/rest/v1/public_company_profile?park_id=eq.' + PARK_ID + '&select=id,company_name,address', {
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
   });
   const rows = await res.json();
-  cachedCompanyId = rows[0]?.id || null;
-  return cachedCompanyId;
+  cachedCompanyProfile = rows[0] || null;
+  cachedCompanyId = cachedCompanyProfile?.id || null;
+  return cachedCompanyProfile;
+}
+async function getCompanyId() {
+  if (cachedCompanyId) return cachedCompanyId;
+  const profile = await getCompanyProfile();
+  return profile?.id || null;
 }
 
 async function saveToSupabase(type, key, data, token) {
@@ -1208,6 +1224,15 @@ export default function AlohaMap() {
   const [selectedStorageLot, setSelectedStorageLot] = useState(null);
   const [payLotSelected, setPayLotSelected] = useState(null);
   const [confirmed, setConfirmed] = useState(null);
+  // Sep 21 (per Mely): real per-company name/address instead of the
+  // hardcoded "Aloha RV Park" strings below — falls back to Aloha's own
+  // real values while this loads, so nothing flashes empty for Aloha.
+  const [companyProfile, setCompanyProfile] = useState({ company_name: "Aloha RV Park", address: "4648 S. Orange Blossom Trail, Kissimmee FL 34744" });
+  useEffect(() => {
+    getCompanyProfile().then((profile) => {
+      if (profile) setCompanyProfile(profile);
+    });
+  }, []);
   const containerRef = useRef(null);
   const aboveMapRef = useRef(null);
   const [previewWidth, setPreviewWidth] = useState(null); // null = actual device width; 900/390 = forced preview
@@ -1630,7 +1655,7 @@ export default function AlohaMap() {
           </p>
           <div style={{ background:"#f0fdf4", borderRadius:12, padding:16, marginBottom:24 }}>
             <p style={{ fontFamily:"sans-serif", fontSize:13, color:"#16a34a", fontWeight:600 }}>
-              📍 Aloha RV Park · 4648 S. Orange Blossom Trail, Kissimmee FL 34744
+              📍 {companyProfile.company_name} · {companyProfile.address}
             </p>
           </div>
           <button onClick={()=>setConfirmed(null)} style={{ ...btnPrimary, width:"100%" }}>← Back to Map</button>
@@ -1655,7 +1680,7 @@ export default function AlohaMap() {
       {/* Header */}
       <div className="map-header" style={{ background:"linear-gradient(135deg,#14532d,#16a34a)", padding:"24px" }}>
         <div>
-          <div style={{ fontFamily:"Georgia,serif", fontWeight:900, fontSize:22, color:"#fff" }}>🌺 Aloha RV Park</div>
+          <div style={{ fontFamily:"Georgia,serif", fontWeight:900, fontSize:22, color:"#fff" }}>🌺 {companyProfile.company_name}</div>
           <div style={{ fontSize:12, color:"rgba(255,255,255,0.8)", letterSpacing:1, marginTop:4 }}>INTERACTIVE LOT MAP · KISSIMMEE, FL</div>
         </div>
         <div className="map-legend">
@@ -1778,7 +1803,7 @@ export default function AlohaMap() {
         >
           <img
             src={MAP_IMG}
-            alt="Aloha RV Park Map"
+            alt={`${companyProfile.company_name} Map`}
             style={{ width:"100%", height:"auto", display:"block", borderRadius:12, boxShadow:"0 4px 24px rgba(0,0,0,0.18)" }}
           />
           {/* Snap Lines */}
@@ -2008,7 +2033,7 @@ export default function AlohaMap() {
                           </div>
                         )}
                         <div style={{ marginTop:16, textAlign:"center" }}>
-                          <div style={{ fontSize:11, color:"#9ca3af", fontFamily:"sans-serif" }}>🌺 Aloha RV Park · Kissimmee, FL</div>
+                          <div style={{ fontSize:11, color:"#9ca3af", fontFamily:"sans-serif" }}>🌺 {companyProfile.company_name} · {companyProfile.address}</div>
                         </div>
                       </div>
                     </div>
