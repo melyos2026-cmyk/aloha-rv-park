@@ -546,6 +546,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           rvLength: form.rvLength,
           slideOutDriverCount: form.slideOutDriverCount,
           slideOutPassengerCount: form.slideOutPassengerCount,
+          parkId: PARK_ID,
         }),
       });
 

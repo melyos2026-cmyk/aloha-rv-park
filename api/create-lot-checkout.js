@@ -7,8 +7,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const PARK_ID = 'aloha';
-
 // Determines whether `dateStr` (YYYY-MM-DD) falls within the park's
 // configured high season (MM-DD to MM-DD, e.g. "10-01" to "04-30").
 // Handles a season that wraps across the new year (start > end).
@@ -71,7 +69,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { lotId, arrivalDate, departureDate, customerEmail, rvLength } = req.body || {};
+    const { lotId, arrivalDate, departureDate, customerEmail, rvLength, parkId } = req.body || {};
+    // Sep 24 (per Mely — found live: a Sunset Ridge reservation could
+    // silently book/price against ALOHA's own lots, since this whole
+    // file previously hardcoded PARK_ID = 'aloha' rather than reading it
+    // from the request, unlike lot-data.js which already did this
+    // correctly). Falls back to 'aloha' only for old links that predate
+    // this fix and never sent parkId at all.
+    const PARK_ID = parkId || 'aloha';
 
     if (!lotId || !arrivalDate || !departureDate) {
       return res.status(400).json({ error: 'Missing lot ID or dates' });
@@ -355,7 +360,8 @@ export default async function handler(req, res) {
         : {}),
       metadata: {
         lotId,
-        park: 'aloha-rv-park',
+        park: PARK_ID,
+        park_id: PARK_ID,
         service: 'rv_lot',
         arrivalDate,
         departureDate,

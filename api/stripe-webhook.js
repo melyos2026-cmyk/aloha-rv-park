@@ -141,12 +141,13 @@ export default async function handler(req, res) {
     const { service } = session.metadata || {};
 
     if (service === 'rv_lot') {
-      const { lotId, arrivalDate, departureDate, months, weeks, extraDays, isYearly } = session.metadata || {};
+      const { lotId, arrivalDate, departureDate, months, weeks, extraDays, isYearly, park_id: parkId } = session.metadata || {};
 
       try {
         const { error } = await supabase.from('lot_orders').upsert(
           {
             lot_id: lotId,
+            park_id: parkId || 'aloha',
             customer_email: session.customer_details?.email || null,
             customer_name: session.customer_details?.name || null,
             billing_type: isYearly === 'true' ? 'yearly' : 'monthly_daily',
@@ -181,6 +182,7 @@ export default async function handler(req, res) {
               .from('lot_orders')
               .select('id, arrival_date, departure_date, customer_name, customer_email')
               .eq('lot_id', lotId)
+              .eq('park_id', parkId || 'aloha')
               .eq('status', 'paid')
               .neq('stripe_session_id', session.id);
 
