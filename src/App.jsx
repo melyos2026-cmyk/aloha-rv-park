@@ -1546,6 +1546,17 @@ export default function AlohaMap() {
         loadFromSupabase('emojiRotations'),
         loadFromSupabase('textRotations'),
       ]);
+      // Oct 9 (per Mely): lot positions now live in the database
+      // (map_elements, type 'lotGeometry'), not only in this file. The
+      // LOTS constant below is just the default for a park that has never
+      // saved its own positions.
+      try {
+        const geoRows = await loadFromSupabase('lotGeometry');
+        const geo = geoRows[0]?.data;
+        if (geo && typeof geo === 'object' && Object.keys(geo).length > 0) setDraftLots(geo);
+      } catch (err) {
+        console.error('Error loading lot positions:', err);
+      }
       if (emojiRows.length > 0) setEmojis(emojiRows[0].data || []);
       if (shapeRows.length > 0) setLotShapes(shapeRows[0].data || {});
       if (textRows.length > 0) setTexts(textRows[0].data || []);
@@ -2687,6 +2698,7 @@ export default function AlohaMap() {
                 saveToSupabase('rotations', 'all', rotations, editToken),
                 saveToSupabase('emojiRotations', 'all', emojiRotations, editToken),
                 saveToSupabase('textRotations', 'all', textRotations, editToken),
+                saveToSupabase('lotGeometry', 'all', draftLots, editToken),
               ]);
               if (saveResults.some(ok => !ok)) {
                 throw new Error("One or more changes failed to save — check the browser console for details, or try again.");
@@ -2701,45 +2713,19 @@ export default function AlohaMap() {
               const verifyRows = await verifyRes.json();
               const verifyData = Array.isArray(verifyRows) && verifyRows[0] ? verifyRows[0].data : null;
               console.log('VERIFY after save — rows returned:', verifyRows.length, 'newest row data:', verifyData);
-              alert(
-                "Changes saved! Verification: " + (verifyRows.length || 0) + " row(s) found for emojis.\n" +
-                (verifyData ? "First emoji in newest row: " + JSON.stringify(verifyData[0]) : "No data in newest row!")
-              );
 
-              // Aug 12 (per Mely): only sync to GitHub when a lot's
-              // position/size actually changed — most saves are just
-              // emoji/color/text edits and never needed to touch GitHub
-              // at all, so this avoids the confusing "could not sync"
-              // error appearing for changes that were never related to
-              // lot positions in the first place.
-              const lotsChanged = JSON.stringify(draftLots) !== JSON.stringify(LOTS);
-              if (lotsChanged) {
-                // Get current file SHA
-                const fileRes = await fetch('/api/save-to-github?parkId=' + encodeURIComponent(PARK_ID) + '&token=' + encodeURIComponent(editToken));
-                const fileData = await fileRes.json();
-                if (!fileRes.ok || !fileData.content) {
-                  throw new Error(
-                    "Emoji/color/shape changes were saved, but lot coordinates could not sync to GitHub: " +
-                    (fileData.message || "unknown error — check GITHUB_TOKEN/GITHUB_REPO in Vercel.")
-                  );
-                }
-                const sha = fileData.sha;
-                const currentContent = new TextDecoder("utf-8").decode(Uint8Array.from(atob(fileData.content.replace(/\n/g,"")), c => c.charCodeAt(0)));
-                // Replace LOTS in file
-                const lotsStr = "const LOTS = {\n" + Object.entries(draftLots).map(([k,v])=>`  ${k}: [${v.map(n=>n.toFixed(1)).join(", ")}],`).join("\n") + "\n};";
-                const newContent = currentContent.replace(/const LOTS = \{[\s\S]*?\};/, lotsStr);
-                // Commit
-                const updateRes = await fetch('/api/save-to-github', {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ parkId: PARK_ID, token: editToken, message: "Update lot coordinates from map editor", content: btoa(unescape(encodeURIComponent(newContent))), sha })
-                });
-                if (!updateRes.ok) {
-                  const err = await updateRes.json();
-                  throw new Error("Emoji/color/shape changes were saved, but lot coordinates could not sync to GitHub: " + err.message);
-                }
+              // Oct 9: lot positions are saved in the database together with
+              // everything else above (no more GitHub file edit, which could
+              // fail silently). Read them back to prove they were stored.
+              const geoCheck = await fetch('/api/save-map-element?parkId=' + encodeURIComponent(PARK_ID) + '&type=lotGeometry');
+              const geoRows = await geoCheck.json();
+              const stored = Array.isArray(geoRows) && geoRows[0] ? geoRows[0].data : null;
+              const sameLots = stored && Object.keys(draftLots).length === Object.keys(stored).length &&
+                Object.keys(draftLots).every(k => stored[k] && JSON.stringify(stored[k]) === JSON.stringify(draftLots[k]));
+              if (!sameLots) {
+                throw new Error("Lot positions were NOT stored correctly. Do not close this page — press Save again or send a screenshot.");
               }
-              alert("Changes saved!" + (lotsChanged ? " Lot position updates will appear everywhere in ~30 seconds." : ""));
+              alert("✅ Saved. " + Object.keys(stored).length + " lot positions stored in the database (plus emojis, colors, shapes and text).");
             } catch(e) {
               alert("⚠️ Error: " + e.message);
             }
