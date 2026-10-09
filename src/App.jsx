@@ -1379,6 +1379,8 @@ export default function AlohaMap() {
   const [scale, setScale] = useState({ w: 900, h: 900 * MAP_ASPECT_RATIO });
   const scaleFactor = (scale.w || 900) / 900;
   const [draftLots, setDraftLots] = useState(LOTS);
+  // Oct 9: styled confirmation (replaces the browser's plain window.confirm popup)
+  const [confirmDeleteLot, setConfirmDeleteLot] = useState(null);
   const [activeEditLot, setActiveEditLot] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoUploadError, setPhotoUploadError] = useState("");
@@ -2338,12 +2340,31 @@ export default function AlohaMap() {
                 <strong style={{ fontSize:15 }}>Editing: <span style={{ color:"#16a34a" }}>{activeEditLot}</span></strong>
                 <div style={{ display:"flex", gap:8 }}>
                   {isAdmin && (
-                  <button onClick={()=>{
-                    if (window.confirm(`Delete lot ${activeEditLot}?`)) {
-                      setDraftLots(prev=>{ const n={...prev}; delete n[activeEditLot]; return n; });
-                      setActiveEditLot(null);
-                    }
-                  }} style={{ background:"#ef4444", color:"#fff", border:"none", padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Delete</button>
+                  <>
+                  <button onClick={()=>setConfirmDeleteLot(activeEditLot)} style={{ background:"#ef4444", color:"#fff", border:"none", padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Delete</button>
+                  {confirmDeleteLot && (
+                    <div onClick={()=>setConfirmDeleteLot(null)} style={{ position:"fixed", inset:0, background:"rgba(17,24,39,0.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100000, padding:16 }}>
+                      <div onClick={(e)=>e.stopPropagation()} style={{ background:"#fff", borderRadius:14, padding:"22px 24px", width:"100%", maxWidth:380, boxShadow:"0 20px 50px rgba(0,0,0,0.35)", fontFamily:"system-ui, -apple-system, Segoe UI, sans-serif" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                          <div style={{ width:36, height:36, borderRadius:999, background:"#fee2e2", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🗑️</div>
+                          <div style={{ fontSize:17, fontWeight:700, color:"#111827" }}>Delete lot {confirmDeleteLot}?</div>
+                        </div>
+                        <p style={{ margin:"0 0 18px", fontSize:13.5, lineHeight:1.5, color:"#4b5563" }}>
+                          This removes the lot from the map. Press <strong>Save</strong> afterwards to make it permanent. Payment and reservation history is not deleted.
+                        </p>
+                        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+                          <button onClick={()=>setConfirmDeleteLot(null)} style={{ background:"#f3f4f6", color:"#374151", border:"none", padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13.5, fontWeight:600 }}>Cancel</button>
+                          <button onClick={()=>{
+                            const lot = confirmDeleteLot;
+                            setDraftLots(prev=>{ const n={...prev}; delete n[lot]; return n; });
+                            setActiveEditLot(null);
+                            setConfirmDeleteLot(null);
+                          }} style={{ background:"#dc2626", color:"#fff", border:"none", padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13.5, fontWeight:700 }}>Delete lot</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  </>
                   )}
                   <button onClick={()=>setActiveEditLot(null)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer", color:"#888" }}>✕</button>
                 </div>
