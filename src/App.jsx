@@ -1838,7 +1838,7 @@ export default function AlohaMap() {
           } : undefined}
           onMouseLeave={editMode ? () => { setDragging(null); setDraggingEmoji(null); } : undefined}
         >
-          <style>{`.map-loading > :not(img){opacity:0 !important;pointer-events:none !important;} .map-ready > :not(img){transition:opacity .25s ease;}`}</style>
+          <style>{`.map-loading{opacity:0 !important;} .map-loading > *{pointer-events:none !important;} .map-ready{transition:opacity .2s ease;}`}</style>
           <img
             ref={mapImgRef}
             onLoad={() => setImgReady(true)}
