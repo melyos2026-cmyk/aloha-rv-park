@@ -2759,18 +2759,18 @@ export default function AlohaMap() {
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:3000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ background:"#fff", borderRadius:16, padding:"24px 26px", width:"100%", maxWidth:420, boxShadow:"0 20px 50px rgba(0,0,0,0.35)", fontFamily:"sans-serif", maxHeight:"85vh", overflowY:"auto" }}>
             <div style={{ fontSize:19, fontWeight:700, color: saveResult.ok ? "#15803d" : "#b91c1c", marginBottom:10 }}>
-              {saveResult.ok ? "✅ Guardado correctamente" : "⚠️ No se pudo guardar"}
+              {saveResult.ok ? "✅ Saved successfully" : "⚠️ Could not save"}
             </div>
             {saveResult.ok ? (
               <div style={{ fontSize:14, color:"#374151", lineHeight:1.55 }}>
-                <div>Todo guardado. <b>{saveResult.total}</b> lotes en la base de datos (más emojis, colores, formas y textos).</div>
+                <div>Everything saved. <b>{saveResult.total}</b> lots in the database (plus emojis, colors, shapes and text).</div>
                 <div style={{ marginTop:10 }}>
                   {saveResult.changed.length > 0
-                    ? <>Actualizados en este guardado ({saveResult.changed.length}): <b>{saveResult.changed.join(", ")}</b></>
-                    : <>Ningún lote cambió de posición en este guardado.</>}
+                    ? <>Updated in this save ({saveResult.changed.length}): <b>{saveResult.changed.join(", ")}</b></>
+                    : <>No lot positions changed in this save.</>}
                 </div>
                 {saveResult.removed.length > 0 && (
-                  <div style={{ marginTop:10 }}>Lotes eliminados: <b>{saveResult.removed.join(", ")}</b></div>
+                  <div style={{ marginTop:10 }}>Removed lots: <b>{saveResult.removed.join(", ")}</b></div>
                 )}
               </div>
             ) : (
