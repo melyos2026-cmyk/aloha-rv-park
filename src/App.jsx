@@ -1380,6 +1380,7 @@ export default function AlohaMap() {
   // Oct 9: styled confirmation (replaces the browser's plain window.confirm popup)
   const [confirmDeleteLot, setConfirmDeleteLot] = useState(null);
   const [saveResult, setSaveResult] = useState(null);
+  const lastSavedLots = useRef(LOTS); // what the database held after the previous save/load
   const [activeEditLot, setActiveEditLot] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoUploadError, setPhotoUploadError] = useState("");
@@ -1552,7 +1553,7 @@ export default function AlohaMap() {
       try {
         const geoRows = await loadFromSupabase('lotGeometry');
         const geo = geoRows[0]?.data;
-        if (geo && typeof geo === 'object' && Object.keys(geo).length > 0) setDraftLots(geo);
+        if (geo && typeof geo === 'object' && Object.keys(geo).length > 0) { setDraftLots(geo); lastSavedLots.current = geo; }
       } catch (err) {
         console.error('Error loading lot positions:', err);
       }
@@ -2724,8 +2725,10 @@ export default function AlohaMap() {
               if (!sameLots) {
                 throw new Error("Lot positions were NOT stored correctly. Do not close this page — press Save again or send a screenshot.");
               }
-              const changedNames = Object.keys(stored).filter(k => !LOTS[k] || JSON.stringify(LOTS[k]) !== JSON.stringify(stored[k]));
-              const removedNames = Object.keys(LOTS).filter(k => !stored[k]);
+              const prevLots = lastSavedLots.current || {};
+              const changedNames = Object.keys(stored).filter(k => !prevLots[k] || JSON.stringify(prevLots[k]) !== JSON.stringify(stored[k]));
+              const removedNames = Object.keys(prevLots).filter(k => !stored[k]);
+              lastSavedLots.current = stored;
               setSaveResult({ ok:true, total:Object.keys(stored).length, changed:changedNames, removed:removedNames });
             } catch(e) {
               setSaveResult({ ok:false, message:e.message });
@@ -2760,10 +2763,11 @@ export default function AlohaMap() {
             </div>
             {saveResult.ok ? (
               <div style={{ fontSize:14, color:"#374151", lineHeight:1.55 }}>
-                <div><b>{saveResult.total}</b> lotes guardados en la base de datos (más emojis, colores, formas y textos).</div>
+                <div>Todo guardado. <b>{saveResult.total}</b> lotes en la base de datos (más emojis, colores, formas y textos).</div>
                 <div style={{ marginTop:10 }}>
-                  <b>{saveResult.changed.length}</b> lotes con posición distinta a la versión anterior
-                  {saveResult.changed.length > 0 && <div style={{ marginTop:4, fontSize:12.5, color:"#6b7280", wordBreak:"break-word" }}>{saveResult.changed.join(", ")}</div>}
+                  {saveResult.changed.length > 0
+                    ? <>Actualizados en este guardado ({saveResult.changed.length}): <b>{saveResult.changed.join(", ")}</b></>
+                    : <>Ningún lote cambió de posición en este guardado.</>}
                 </div>
                 {saveResult.removed.length > 0 && (
                   <div style={{ marginTop:10 }}>Lotes eliminados: <b>{saveResult.removed.join(", ")}</b></div>
