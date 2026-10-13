@@ -206,7 +206,6 @@ const LOTS = {
   A4: [25.1, 16.8, 4.1, 5.4],
   A3: [29.1, 16.8, 4.1, 5.4],
   A2: [33.2, 16.8, 4.1, 5.4],
-  A1: [37.2, 16.8, 4.1, 5.4],
   A9: [7.7, 22.2, 3.9, 5.7],
   A11: [11.5, 22.2, 4.2, 5.7],
   A13: [15.7, 22.3, 4.2, 5.7],
@@ -231,7 +230,6 @@ const LOTS = {
   A28: [37.2, 31.5, 3.8, 6.0],
   A30: [40.9, 31.5, 3.8, 6.1],
   A32: [44.6, 31.5, 3.8, 6.1],
-  A33: [48.4, 31.5, 3.7, 6.1],
   A34: [51.8, 37.9, 6.0, 6.4],
   B1: [63.9, 24.2, 5.4, 2.8],
   B2: [63.9, 27.0, 5.4, 2.8],
@@ -1381,6 +1379,7 @@ export default function AlohaMap() {
   const [draftLots, setDraftLots] = useState(LOTS);
   // Oct 9: styled confirmation (replaces the browser's plain window.confirm popup)
   const [confirmDeleteLot, setConfirmDeleteLot] = useState(null);
+  const [saveResult, setSaveResult] = useState(null);
   const [activeEditLot, setActiveEditLot] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoUploadError, setPhotoUploadError] = useState("");
@@ -2725,9 +2724,11 @@ export default function AlohaMap() {
               if (!sameLots) {
                 throw new Error("Lot positions were NOT stored correctly. Do not close this page — press Save again or send a screenshot.");
               }
-              alert("✅ Saved. " + Object.keys(stored).length + " lot positions stored in the database (plus emojis, colors, shapes and text).");
+              const changedNames = Object.keys(stored).filter(k => !LOTS[k] || JSON.stringify(LOTS[k]) !== JSON.stringify(stored[k]));
+              const removedNames = Object.keys(LOTS).filter(k => !stored[k]);
+              setSaveResult({ ok:true, total:Object.keys(stored).length, changed:changedNames, removed:removedNames });
             } catch(e) {
-              alert("⚠️ Error: " + e.message);
+              setSaveResult({ ok:false, message:e.message });
             }
           }} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"10px 20px", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:600, width:"100%" }}>
             💾 Save All Changes
@@ -2748,6 +2749,33 @@ export default function AlohaMap() {
             💾 Save Changes
           </button>
           )}
+        </div>
+      )}
+
+      {saveResult && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:3000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"#fff", borderRadius:16, padding:"24px 26px", width:"100%", maxWidth:420, boxShadow:"0 20px 50px rgba(0,0,0,0.35)", fontFamily:"sans-serif", maxHeight:"85vh", overflowY:"auto" }}>
+            <div style={{ fontSize:19, fontWeight:700, color: saveResult.ok ? "#15803d" : "#b91c1c", marginBottom:10 }}>
+              {saveResult.ok ? "✅ Guardado correctamente" : "⚠️ No se pudo guardar"}
+            </div>
+            {saveResult.ok ? (
+              <div style={{ fontSize:14, color:"#374151", lineHeight:1.55 }}>
+                <div><b>{saveResult.total}</b> lotes guardados en la base de datos (más emojis, colores, formas y textos).</div>
+                <div style={{ marginTop:10 }}>
+                  <b>{saveResult.changed.length}</b> lotes con posición distinta a la versión anterior
+                  {saveResult.changed.length > 0 && <div style={{ marginTop:4, fontSize:12.5, color:"#6b7280", wordBreak:"break-word" }}>{saveResult.changed.join(", ")}</div>}
+                </div>
+                {saveResult.removed.length > 0 && (
+                  <div style={{ marginTop:10 }}>Lotes eliminados: <b>{saveResult.removed.join(", ")}</b></div>
+                )}
+              </div>
+            ) : (
+              <div style={{ fontSize:14, color:"#374151", lineHeight:1.55 }}>{saveResult.message}</div>
+            )}
+            <div style={{ display:"flex", justifyContent:"flex-end", marginTop:18 }}>
+              <button onClick={()=>setSaveResult(null)} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"9px 22px", borderRadius:9, cursor:"pointer", fontSize:14, fontWeight:700 }}>OK</button>
+            </div>
+          </div>
         </div>
       )}
 
