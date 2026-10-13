@@ -142,6 +142,8 @@ export default async function handler(req, res) {
       payment_method_types: ['card'],
       customer_email: customerEmail || undefined,
       line_items,
+      // Oct 13 (per Mely): policy shown on Stripe's pay button before the customer pays.
+      custom_text: { submit: { message: 'No refunds on propane purchases. A $15 fee applies to any payment dispute or chargeback.' } },
       // Aug 6 (per Mely): Aloha gets 100% of the propane subtotal + tax;
       // MelyOS keeps only the processing fee — same split model as every
       // other checkout (lot booking, storage).
