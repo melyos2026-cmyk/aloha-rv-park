@@ -1547,7 +1547,7 @@ export default function AlohaMap() {
 
   useEffect(() => {
     async function loadData() {
-      const [emojiRows, shapeRows, textRows, colorRows, rotRows, emojiRotRows, textRotRows] = await Promise.all([
+      const [emojiRows, shapeRows, textRows, colorRows, rotRows, emojiRotRows, textRotRows, geoRowsAll, statusData] = await Promise.all([
         loadFromSupabase('emojis'),
         loadFromSupabase('shapes'),
         loadFromSupabase('texts'),
@@ -1555,14 +1555,15 @@ export default function AlohaMap() {
         loadFromSupabase('rotations'),
         loadFromSupabase('emojiRotations'),
         loadFromSupabase('textRotations'),
+        loadFromSupabase('lotGeometry').catch(() => []),
+        fetch('/api/lot-data?type=statuses&park_id=' + PARK_ID).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
       // Oct 9 (per Mely): lot positions now live in the database
       // (map_elements, type 'lotGeometry'), not only in this file. The
       // LOTS constant below is just the default for a park that has never
       // saved its own positions.
       try {
-        const geoRows = await loadFromSupabase('lotGeometry');
-        const geo = geoRows[0]?.data;
+        const geo = geoRowsAll[0]?.data;
         if (geo && typeof geo === 'object' && Object.keys(geo).length > 0) { setDraftLots(geo); lastSavedLots.current = geo; }
       } catch (err) {
         console.error('Error loading lot positions:', err);
@@ -1574,19 +1575,16 @@ export default function AlohaMap() {
       if (rotRows.length > 0) setRotations(rotRows[0].data || {});
       if (emojiRotRows.length > 0) setEmojiRotations(emojiRotRows[0].data || {});
       if (textRotRows.length > 0) setTextRotations(textRotRows[0].data || {});
+      if (statusData) {
+        setStatuses(prev => ({ ...prev, ...(statusData.statuses || {}) }));
+        setBookingDisabled(statusData.bookingDisabled || {});
+      }
+      // Everything that changes how the lots LOOK is in — show the map now.
+      // (Prices, dates and settings below load quietly afterwards.)
+      setDataReady(true);
       // Real, live lot statuses — rv_lots.status is the single source of
       // truth shared with the lease application / reservation systems, not
       // the old disconnected map_elements "statuses" blob.
-      try {
-        const statusRes = await fetch('/api/lot-data?type=statuses&park_id=' + PARK_ID);
-        if (statusRes.ok) {
-          const { statuses: liveStatusMap, bookingDisabled: liveBookingDisabled } = await statusRes.json();
-          setStatuses(prev => ({ ...prev, ...(liveStatusMap || {}) }));
-          setBookingDisabled(liveBookingDisabled || {});
-        }
-      } catch (err) {
-        console.error('Error loading live lot statuses:', err);
-      }
       try {
         const reservedRes = await fetch('/api/lot-data?type=reserved-dates&park_id=' + PARK_ID);
         if (reservedRes.ok) {
