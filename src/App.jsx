@@ -1377,6 +1377,16 @@ export default function AlohaMap() {
   const [scale, setScale] = useState({ w: 900, h: 900 * MAP_ASPECT_RATIO });
   const scaleFactor = (scale.w || 900) / 900;
   const [draftLots, setDraftLots] = useState(LOTS);
+  // Oct 13 (per Mely): keep the lot overlays hidden until the map image AND the saved
+  // positions/colors/statuses have loaded, so nothing jumps around on refresh.
+  const [dataReady, setDataReady] = useState(false);
+  const [imgReady, setImgReady] = useState(false);
+  const mapImgRef = useRef(null);
+  useEffect(() => {
+    const t = setTimeout(() => { setDataReady(true); setImgReady(true); }, 5000); // safety: never stay hidden
+    return () => clearTimeout(t);
+  }, []);
+  useEffect(() => { if (mapImgRef.current && mapImgRef.current.complete) setImgReady(true); }, []);
   // Oct 9: styled confirmation (replaces the browser's plain window.confirm popup)
   const [confirmDeleteLot, setConfirmDeleteLot] = useState(null);
   const [saveResult, setSaveResult] = useState(null);
@@ -1607,7 +1617,7 @@ export default function AlohaMap() {
       const settings = await loadParkSettings();
       if (settings) setParkSettings(settings);
     }
-    loadData();
+    loadData().catch(err => console.error('loadData failed:', err)).finally(() => setDataReady(true));
   }, []);
 
   const handleConfirm = (lot, form) => {
@@ -1782,6 +1792,7 @@ export default function AlohaMap() {
             transformOrigin: "center center",
             transition: isPanning ? "none" : "transform 0.15s ease-out",
           }}
+          className={(dataReady && imgReady) ? 'map-ready' : 'map-loading'}
           onClick={() => setActiveEmoji(null)}
           onMouseMove={editMode ? (e) => {
             if (draggingEmoji) {
@@ -1815,10 +1826,13 @@ export default function AlohaMap() {
           } : undefined}
           onMouseLeave={editMode ? () => { setDragging(null); setDraggingEmoji(null); } : undefined}
         >
+          <style>{`.map-loading > :not(img){opacity:0 !important;pointer-events:none !important;} .map-ready > :not(img){transition:opacity .25s ease;}`}</style>
           <img
+            ref={mapImgRef}
+            onLoad={() => setImgReady(true)}
             src={MAP_IMG}
             alt={`${companyProfile.company_name} Map`}
-            style={{ width:"100%", height:"auto", display:"block", borderRadius:12, boxShadow:"0 4px 24px rgba(0,0,0,0.18)" }}
+            style={{ width:"100%", height:"auto", aspectRatio:"auto 1116 / 1409", display:"block", borderRadius:12, boxShadow:"0 4px 24px rgba(0,0,0,0.18)" }}
           />
           {/* Snap Lines */}
           {editMode && snapLines.x !== null && (
