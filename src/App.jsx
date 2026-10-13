@@ -7,7 +7,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { Rnd } from "react-rnd";
 
-const MAP_IMG = "/AlohaRvParkMap.png";
+const MAP_IMG = "/AlohaRvParkMap.webp"; // Oct 13: same map, ~5x smaller file = loads much faster
 // Aug 12 (per Mely): the map/lot/emoji positioning system hardcoded the
 // image's aspect ratio as 1130/900 (1.2556), but the real PNG is
 // 1116x1409 (1.2625) — a small mismatch that compounds into visible
@@ -188,6 +188,13 @@ async function loadParkSettings() {
   const rows = await res.json();
   return rows[0] || null;
 }
+
+// Oct 13 (per Mely): remember the last-loaded map look in this browser so the
+// lots appear instantly on repeat visits; fresh data still replaces it a moment later.
+const MAP_CACHE_KEY = 'mapcache_' + PARK_ID;
+function readMapCache() { try { return JSON.parse(localStorage.getItem(MAP_CACHE_KEY) || 'null'); } catch { return null; } }
+function writeMapCache(o) { try { localStorage.setItem(MAP_CACHE_KEY, JSON.stringify(o)); } catch {} }
+const MAP_CACHE = readMapCache();
 
 async function loadFromSupabase(type) {
   const res = await fetch('/api/save-map-element?parkId=' + encodeURIComponent(PARK_ID) + '&type=' + encodeURIComponent(type));
@@ -1215,7 +1222,7 @@ const emojiHoverStyle = `
 `;
 
 export default function AlohaMap() {
-  const [statuses, setStatuses] = useState(initStatuses);
+  const [statuses, setStatuses] = useState(() => (MAP_CACHE && MAP_CACHE.statuses) ? { ...initStatuses(), ...MAP_CACHE.statuses } : initStatuses());
   const [bookingDisabled, setBookingDisabled] = useState({});
   const [reservedDates, setReservedDates] = useState({});
   const [hover, setHover] = useState(null);
@@ -1376,10 +1383,10 @@ export default function AlohaMap() {
 
   const [scale, setScale] = useState({ w: 900, h: 900 * MAP_ASPECT_RATIO });
   const scaleFactor = (scale.w || 900) / 900;
-  const [draftLots, setDraftLots] = useState(LOTS);
+  const [draftLots, setDraftLots] = useState(() => (MAP_CACHE && MAP_CACHE.lots && Object.keys(MAP_CACHE.lots).length > 0) ? MAP_CACHE.lots : LOTS);
   // Oct 13 (per Mely): keep the lot overlays hidden until the map image AND the saved
   // positions/colors/statuses have loaded, so nothing jumps around on refresh.
-  const [dataReady, setDataReady] = useState(false);
+  const [dataReady, setDataReady] = useState(() => !!(MAP_CACHE && MAP_CACHE.lots));
   const [imgReady, setImgReady] = useState(false);
   const mapImgRef = useRef(null);
   useEffect(() => {
@@ -1396,17 +1403,17 @@ export default function AlohaMap() {
   const [photoUploadError, setPhotoUploadError] = useState("");
   const [snapLines, setSnapLines] = useState({ x: null, y: null });
   const [newLotName, setNewLotName] = useState("");
-  const [texts, setTexts] = useState([]);
-  const [lotColors, setLotColors] = useState({});
-  const [rotations, setRotations] = useState({});
-  const [emojiRotations, setEmojiRotations] = useState({});
-  const [textRotations, setTextRotations] = useState({});
+  const [texts, setTexts] = useState(() => (MAP_CACHE && MAP_CACHE.texts) || []);
+  const [lotColors, setLotColors] = useState(() => (MAP_CACHE && MAP_CACHE.lotColors) || {});
+  const [rotations, setRotations] = useState(() => (MAP_CACHE && MAP_CACHE.rotations) || {});
+  const [emojiRotations, setEmojiRotations] = useState(() => (MAP_CACHE && MAP_CACHE.emojiRotations) || {});
+  const [textRotations, setTextRotations] = useState(() => (MAP_CACHE && MAP_CACHE.textRotations) || {});
   const [lotInfo, setLotInfo] = useState({});
   const [parkSettings, setParkSettings] = useState({ cancellation_days: 7, checkin_time: "2:00 PM", checkout_time: "11:00 AM" });
   const [showParkSettings, setShowParkSettings] = useState(false);
   const [showMyReservations, setShowMyReservations] = useState(false);
-  const [emojis, setEmojis] = useState([]);
-  const [lotShapes, setLotShapes] = useState({});
+  const [emojis, setEmojis] = useState(() => (MAP_CACHE && MAP_CACHE.emojis) || []);
+  const [lotShapes, setLotShapes] = useState(() => (MAP_CACHE && MAP_CACHE.lotShapes) || {});
   const [dragging, setDragging] = useState(null);
   // Aug 12 (per Mely): emoji edit-mode dragging now uses this SAME
   // real-DOM-rect-based % computation as everything else (lots, guest
@@ -1579,6 +1586,13 @@ export default function AlohaMap() {
         setStatuses(prev => ({ ...prev, ...(statusData.statuses || {}) }));
         setBookingDisabled(statusData.bookingDisabled || {});
       }
+      writeMapCache({
+        lots: (geoRowsAll[0]?.data && Object.keys(geoRowsAll[0].data).length > 0) ? geoRowsAll[0].data : null,
+        emojis: emojiRows[0]?.data || [], lotShapes: shapeRows[0]?.data || {}, texts: textRows[0]?.data || [],
+        lotColors: colorRows[0]?.data || {}, rotations: rotRows[0]?.data || {},
+        emojiRotations: emojiRotRows[0]?.data || {}, textRotations: textRotRows[0]?.data || {},
+        statuses: (statusData && statusData.statuses) || {},
+      });
       // Everything that changes how the lots LOOK is in — show the map now.
       // (Prices, dates and settings below load quietly afterwards.)
       setDataReady(true);
