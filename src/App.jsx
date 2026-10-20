@@ -1105,6 +1105,10 @@ function MyReservationsModal({ parkSettings, onClose }) {
     setCancellingId(orderId);
     setError("");
     try {
+      // Oct 20 (security review): cancelling now takes 2 steps — the server
+      // e-mails a one-time code to the booking's address, and the guest
+      // types it here. Knowing someone's e-mail is no longer enough to
+      // cancel (and refund) their reservation.
       const res = await fetch('/api/cancel-lot-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1112,8 +1116,20 @@ function MyReservationsModal({ parkSettings, onClose }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not cancel booking');
+      if (!data.codeRequired) throw new Error('Could not cancel booking');
+      const code = window.prompt("We e-mailed an 8-digit code to " + email + ". Enter it to confirm the cancellation (the card processing fee and any administrative fee shown at checkout are not refunded):");
+      if (!code) return;
+      const res2 = await fetch('/api/cancel-lot-booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, email, code: code.trim() }),
+      });
+      const data2 = await res2.json();
+      if (!res2.ok) throw new Error(data2.error || 'Could not cancel booking');
       setBookings(prev => prev.filter(b => b.id !== orderId));
-      alert("Booking cancelled and refunded.");
+      alert(data2.amountRefunded != null
+        ? "Booking cancelled. Refund of $" + Number(data2.amountRefunded).toFixed(2) + " issued to your card."
+        : "Booking cancelled and refunded.");
     } catch (err) {
       setError(err.message);
     } finally {

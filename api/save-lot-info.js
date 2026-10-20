@@ -40,10 +40,27 @@ export default async function handler(req, res) {
       .eq('park_id', parkId)
       .maybeSingle();
 
+    // Oct 20 (security review): `...info` was spread AFTER park_id/lot_key/
+    // company_id, so a caller holding a valid token for park A could send
+    // info.park_id = 'B' (or company_id / id) and overwrite park B's rows.
+    // Now only the lot-detail fields the map editor actually sends
+    // (saveActiveLotInfo in src/App.jsx) are copied, and the identity
+    // columns are always set server-side from the verified parkId.
+    const ALLOWED_FIELDS = [
+      'lot_type', 'size', 'has_electricity', 'amperage',
+      'price_daily', 'price_monthly', 'price_yearly', 'description',
+    ];
+    const safeInfo = {};
+    if (info && typeof info === 'object') {
+      for (const f of ALLOWED_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(info, f)) safeInfo[f] = info[f];
+      }
+    }
+
     const { error } = await supabase
       .from('lot_info')
       .upsert(
-        { park_id: parkId, lot_key: lotKey, company_id: company?.id || null, ...info },
+        { ...safeInfo, park_id: parkId, lot_key: lotKey, company_id: company?.id || null },
         { onConflict: 'park_id,lot_key' }
       );
 

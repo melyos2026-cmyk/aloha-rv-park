@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     // including emojis) stays fully public/unauthenticated on purpose —
     // the map itself is meant to be publicly viewable. Only writing now
     // requires a valid edit token, same fix pattern as set-lot-pricing.js.
-    const { parkId, companyId, type, key, data, token } = req.body;
+    const { parkId, type, key, data, token } = req.body; // Oct 20: body companyId no longer read
     if (!parkId || !type || !key) {
       return res.status(400).json({ error: "parkId, type, and key are required." });
     }
@@ -48,6 +48,18 @@ export default async function handler(req, res) {
     if (!auth.valid) {
       return res.status(403).json({ error: "Not authorized to edit this map." });
     }
+
+    // Oct 20 (security review): companyId used to be taken straight from
+    // the request body, so an editor of park A could stamp park B's
+    // company_id onto rows. checkEditToken already proved the token
+    // belongs to the company whose park_id = parkId, so derive the
+    // company from parkId server-side and ignore the body value.
+    const { data: companyRow } = await supabaseAdmin
+      .from("companies")
+      .select("id")
+      .eq("park_id", parkId)
+      .maybeSingle();
+    const resolvedCompanyId = companyRow?.id || null;
 
     // Delete-then-insert: guarantees exactly one row always exists for
     // this park/type/key, regardless of whether an on_conflict unique
@@ -62,7 +74,7 @@ export default async function handler(req, res) {
 
     const { error: insError } = await supabaseAdmin
       .from("map_elements")
-      .insert({ park_id: parkId, company_id: companyId || null, element_type: type, element_key: key, data });
+      .insert({ park_id: parkId, company_id: resolvedCompanyId, element_type: type, element_key: key, data });
     if (insError) return res.status(500).json({ error: "Insert step failed: " + insError.message });
 
     return res.status(200).json({ success: true });

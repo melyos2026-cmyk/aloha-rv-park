@@ -17,7 +17,14 @@ const supabase = createClient(
 export default async function handler(req, res) {
   const parkId = req.method === 'GET' ? req.query.parkId : req.body?.parkId;
   const token = req.method === 'GET' ? req.query.token : req.body?.token;
-  const auth = await checkEditToken(token, parkId || 'aloha', supabase);
+  // Oct 20 (security review): ANY park's edit token (including a
+  // restricted park_admin token for a different tenant) could commit
+  // src/App.jsx — the single shared source file for EVERY park's map.
+  // Now requires a master_admin token (role is embedded in the signed
+  // token and only issued by melyos-builder to real master_admin
+  // sessions — see generate-map-edit-token/route.ts). Nothing in this
+  // repo's frontend calls this endpoint, so no working feature changes.
+  const auth = await checkEditToken(token, parkId || 'aloha', supabase, 'master_admin');
   if (!auth.valid) {
     return res.status(403).json({ error: 'Not authorized to edit this map.' });
   }
@@ -33,7 +40,17 @@ export default async function handler(req, res) {
   } else if (req.method === 'PUT') {
     const ghToken = process.env.GITHUB_TOKEN;
     const repo = process.env.GITHUB_REPO;
-    const body = req.body;
+    // Oct 20 (security review): previously forwarded req.body verbatim to
+    // GitHub — including our own parkId/token, and any extra GitHub API
+    // fields the caller chose (branch, committer, author...). Now only the
+    // three fields a content update needs are forwarded, and the path stays
+    // fixed to src/App.jsx.
+    const { message, content, sha } = req.body || {};
+    if (typeof message !== 'string' || typeof content !== 'string' || !message || !content) {
+      return res.status(400).json({ error: 'message and content are required.' });
+    }
+    const body = { message, content };
+    if (typeof sha === 'string' && sha) body.sha = sha;
     const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/src/App.jsx`, {
       method: 'PUT',
       headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github.v3+json", "Content-Type": "application/json" },

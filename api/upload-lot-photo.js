@@ -58,7 +58,12 @@ export default async function handler(req, res) {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-zA-Z0-9._-]/g, '_');
-    const filePath = `${company.id}/lot-photos/${lotName}-${Date.now()}-${cleanFileName}`;
+    // Oct 20 (security review): lotName went into the storage path raw, so
+    // a value like "../<other-company-id>/x" could write outside this
+    // company's folder. Only the path segment is sanitized — the DB update
+    // below still matches the real lot_name.
+    const safeLotName = String(lotName).replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.\.+/g, '_');
+    const filePath = `${company.id}/lot-photos/${safeLotName}-${Date.now()}-${cleanFileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('company-assets')

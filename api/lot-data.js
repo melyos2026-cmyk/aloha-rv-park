@@ -186,6 +186,10 @@ async function getStatuses(req, res) {
   return res.status(200).json({ statuses, bookingDisabled });
 }
 
+// Oct 20 (security review): still returns order ids (the My Reservations
+// cancel button needs them), but an id + email is no longer enough to
+// cancel — cancel-lot-booking.js now also requires a one-time code e-mailed
+// to the booking's address, which this endpoint never returns.
 async function getMyBookings(req, res) {
   const { email } = req.query;
   if (!email) return res.status(400).json({ error: 'Missing email' });

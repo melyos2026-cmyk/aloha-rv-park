@@ -144,6 +144,22 @@ export default async function handler(req, res) {
       const { lotId, arrivalDate, departureDate, months, weeks, extraDays, isYearly, park_id: parkId } = session.metadata || {};
 
       try {
+        // Oct 20 (security review): a retried/replayed checkout.session.completed
+        // (Stripe retries for up to 3 days) used to upsert status:'paid' over an
+        // order that had since been refunded/cancelled — resurrecting it as a
+        // paid booking and re-flipping the lot's map color. Now only a new
+        // order, or one still 'pending'/'paid' (same values, keeps the old
+        // repair-on-retry behaviour), is written; anything else is left alone.
+        const { data: existingLotOrder } = await supabase
+          .from('lot_orders')
+          .select('id, status')
+          .eq('stripe_session_id', session.id)
+          .maybeSingle();
+        if (existingLotOrder && !['pending', 'paid'].includes(existingLotOrder.status)) {
+          console.log(`lot_orders ${existingLotOrder.id} is '${existingLotOrder.status}' — ignoring replayed checkout.session.completed ${event.id}`);
+          return res.status(200).json({ received: true, ignored: 'order no longer pending' });
+        }
+
         const { error } = await supabase.from('lot_orders').upsert(
           {
             lot_id: lotId,
