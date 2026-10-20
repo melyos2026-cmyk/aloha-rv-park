@@ -16,13 +16,33 @@ import crypto from 'crypto';
 // rows with no park_id, matching stripe-webhook.js).
 const DEFAULT_PARK_ID = 'aloha';
 
-// Oct 20 (security review): the refund now mirrors melyos-builder's
-// app/api/admin/rv-refunds/route.ts rules — the Card Processing Fee the
-// guest paid is never refunded (MelyOS keeps its application fee), and
-// the $15 administrative fee is deducted ONLY when the guest was shown
-// the checkout notice saying so (read from the session's own custom_text,
-// so older bookings made before the notice existed are not charged it).
-const ADMIN_FEE_CENTS = 1500;
+// Oct 20 (per Mely): the refund is the total paid minus the Card Processing
+// Fee (MelyOS keeps it — Stripe doesn't return its own cost). There is NO
+// administrative fee on refunds; the only $15 fee is for card disputes
+// (chargebacks), which is handled separately.
+
+// Total paid and the processing fee line, read from the booking's own
+// Stripe checkout. Used for the e-mail preview and for the refund itself.
+async function refundBreakdown(order) {
+  const pi = order.stripe_payment_intent;
+  if (!pi) return null;
+  const intent = await stripe.paymentIntents.retrieve(pi, { expand: ['latest_charge'] });
+  const charge = intent.latest_charge;
+  if (!charge || typeof charge === 'string' || !charge.paid) return { error: 'This payment could not be found. Please contact the park office.' };
+  if (charge.refunded || charge.amount_refunded > 0) return { error: 'This booking has already been refunded.' };
+  let feeCents = 0;
+  const sessionId = order.stripe_session_id
+    || (await stripe.checkout.sessions.list({ payment_intent: pi, limit: 1 })).data[0]?.id;
+  if (sessionId) {
+    const items = await stripe.checkout.sessions.listLineItems(sessionId, { limit: 100 });
+    for (const it of items.data) {
+      if (/processing fee/i.test(it.description || '')) feeCents += it.amount_total || 0;
+    }
+  }
+  const totalCents = charge.amount;
+  return { totalCents, feeCents: Math.min(feeCents, totalCents), refundCents: totalCents - Math.min(feeCents, totalCents) };
+}
+const money = (c) => '$' + (c / 100).toFixed(2);
 
 // Oct 20 (security review): cancelling used to need only the order id +
 // the guest's email, and /api/lot-data?type=my-bookings hands out order
@@ -156,19 +176,33 @@ export default async function handler(req, res) {
         console.error('cancel-lot-booking: BOOKING_CANCEL_SECRET/MAP_EDIT_SECRET or RESEND_API_KEY missing');
         return res.status(503).json({ error: 'Online cancellation is temporarily unavailable. Please contact the park office.' });
       }
+      const { data: parkCompany } = await supabase.from('companies').select('company_name').eq('park_id', PARK_ID).maybeSingle();
+      const parkName = parkCompany?.company_name || 'RV Park';
+      const esc = (v) => String(v ?? '').replace(/[<>&"]/g, '');
+      let breakdown = null;
+      try { breakdown = await refundBreakdown(order); } catch (e) { console.error('cancel-lot-booking: breakdown', e); }
+      if (breakdown?.error) return res.status(400).json({ error: breakdown.error });
       const emailRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Aloha RV Park <noreply@aloharvparkfl.com>',
+          from: `${String(parkName).replace(/[<>"]/g, '')} <noreply@aloharvparkfl.com>`,
           to: order.customer_email,
           subject: 'Your reservation cancellation code',
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 420px; margin: 0 auto;">
-              <h2>Cancellation code</h2>
-              <p>Someone asked to cancel your reservation for Lot ${String(order.lot_id || '').replace(/[<>&"]/g, '')} (${order.arrival_date} to ${order.departure_date}).</p>
-              <p style="font-size:28px;font-weight:bold;letter-spacing:4px;">${sendCode}</p>
-              <p style="font-size:13px;color:#555;">Enter this code to confirm. It expires in about 15 minutes. If you did not ask to cancel, ignore this e-mail — your reservation stays as it is.</p>
+            <div style="font-family: Arial, sans-serif; max-width: 460px; margin: 0 auto; color:#111;">
+              <h2 style="margin-bottom:4px;">${esc(parkName)}</h2>
+              <p>We received a request to cancel your reservation for <strong>Lot ${esc(order.lot_id)}</strong> (${esc(order.arrival_date)} to ${esc(order.departure_date)}).</p>
+              <p>To confirm, enter this code:</p>
+              <p style="font-size:30px;font-weight:bold;letter-spacing:4px;margin:8px 0 16px;">${sendCode}</p>
+              ${breakdown && !breakdown.error ? `
+              <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:12px;">
+                <tr><td style="padding:4px 0;">Total paid</td><td style="text-align:right;">${money(breakdown.totalCents)}</td></tr>
+                <tr><td style="padding:4px 0;">Card processing fee (not refundable)</td><td style="text-align:right;">− ${money(breakdown.feeCents)}</td></tr>
+                <tr><td style="padding:6px 0;border-top:1px solid #ddd;"><strong>You will receive</strong></td><td style="text-align:right;border-top:1px solid #ddd;"><strong>${money(breakdown.refundCents)}</strong></td></tr>
+              </table>
+              <p style="font-size:13px;color:#555;">The refund goes back to the card you paid with. Banks usually show it within 5–10 business days.</p>` : ''}
+              <p style="font-size:13px;color:#555;">The code expires in about 15 minutes. If you did not ask to cancel, ignore this e-mail — your reservation stays as it is.</p>
             </div>
           `,
         }),
@@ -205,29 +239,20 @@ export default async function handler(req, res) {
       if (charge.refunded || charge.amount_refunded > 0) {
         return res.status(400).json({ error: 'This booking has already been refunded.' });
       }
-      const totalCents = charge.amount;
-
-      let feeCents = 0;
-      let noticeShown = false;
+      let bd;
       try {
-        const sessionId = order.stripe_session_id
-          || (await stripe.checkout.sessions.list({ payment_intent: pi, limit: 1 })).data[0]?.id;
-        if (sessionId) {
-          const session = await stripe.checkout.sessions.retrieve(sessionId);
-          noticeShown = /administrative fee/i.test(session?.custom_text?.submit?.message || '');
-          const items = await stripe.checkout.sessions.listLineItems(sessionId, { limit: 100 });
-          for (const it of items.data) {
-            if (/processing fee/i.test(it.description || '')) feeCents += it.amount_total || 0;
-          }
-        }
+        bd = await refundBreakdown(order);
       } catch (e) {
         console.error('cancel-lot-booking: could not read checkout session', e);
         return res.status(502).json({ error: 'Could not verify this payment right now. Please try again or contact the park office.' });
       }
-      const adminFeeCents = noticeShown ? ADMIN_FEE_CENTS : 0;
-      refundedCents = totalCents - Math.min(feeCents, totalCents) - adminFeeCents;
+      if (!bd || bd.error) return res.status(400).json({ error: bd?.error || 'This payment could not be found. Please contact the park office.' });
+      const totalCents = bd.totalCents;
+      const feeCents = bd.feeCents;
+      const adminFeeCents = 0; // Oct 20 (per Mely): no administrative fee on refunds
+      refundedCents = bd.refundCents;
       if (refundedCents < 50) {
-        return res.status(400).json({ error: 'After the processing and administrative fees, nothing is left to refund. Please contact the park office.' });
+        return res.status(400).json({ error: 'After the card processing fee, nothing is left to refund. Please contact the park office.' });
       }
 
       // Re-check right before money moves — a second tab / double click

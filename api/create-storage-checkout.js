@@ -97,7 +97,7 @@ export default async function handler(req, res) {
         mode: 'subscription',
         payment_method_types: ['card'],
         // Oct 13 (per Mely): policy shown on Stripe's pay button before the customer pays.
-        custom_text: { submit: { message: 'Cancellations: the processing fee and a $15 administrative fee are deducted from any refund. A $15 fee applies to any payment dispute or chargeback.' } },
+        custom_text: { submit: { message: 'Cancellations: the card processing fee is not refunded. A $15 fee applies to any payment dispute or chargeback.' } },
         customer_email: customerEmail || undefined,
         line_items: [{
           price_data: {
@@ -147,7 +147,7 @@ export default async function handler(req, res) {
         mode: 'payment',
         payment_method_types: ['card'],
         // Oct 13 (per Mely): policy shown on Stripe's pay button before the customer pays.
-        custom_text: { submit: { message: 'Cancellations: the processing fee and a $15 administrative fee are deducted from any refund. A $15 fee applies to any payment dispute or chargeback.' } },
+        custom_text: { submit: { message: 'Cancellations: the card processing fee is not refunded. A $15 fee applies to any payment dispute or chargeback.' } },
         customer_email: customerEmail || undefined,
         line_items: [
           {

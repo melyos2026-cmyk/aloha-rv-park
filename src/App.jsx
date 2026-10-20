@@ -1117,7 +1117,7 @@ function MyReservationsModal({ parkSettings, onClose }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not cancel booking');
       if (!data.codeRequired) throw new Error('Could not cancel booking');
-      const code = window.prompt("We e-mailed an 8-digit code to " + email + ". Enter it to confirm the cancellation (the card processing fee and any administrative fee shown at checkout are not refunded):");
+      const code = window.prompt("We e-mailed an 8-digit code to " + email + ". Enter it to confirm the cancellation (the card processing fee is not refunded):");
       if (!code) return;
       const res2 = await fetch('/api/cancel-lot-booking', {
         method: 'POST',
