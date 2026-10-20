@@ -7,7 +7,21 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { Rnd } from "react-rnd";
 
-const MAP_IMG = "/AlohaRvParkMap.webp"; // Oct 13: same map, ~5x smaller file = loads much faster
+let MAP_IMG = "/AlohaRvParkMap.webp"; // Oct 13: same map, ~5x smaller file = loads much faster
+// Oct 20 (per Mely — MelyOS staff upload each company's own map in
+// admin.melyos.io → Map Builder): main.jsx looks up the park's uploaded
+// picture (map_elements 'mapImage') before the map renders and calls
+// setCustomMap. Parks without one keep the default picture and lots.
+let HAS_CUSTOM_MAP = false;
+let MAP_W = 1116, MAP_H = 1409;
+export function setCustomMap(img) {
+  if (!img || !img.url || !(img.width > 0) || !(img.height > 0)) return;
+  MAP_IMG = img.url;
+  MAP_W = img.width;
+  MAP_H = img.height;
+  MAP_ASPECT_RATIO = img.height / img.width;
+  HAS_CUSTOM_MAP = true;
+}
 // Aug 12 (per Mely): the map/lot/emoji positioning system hardcoded the
 // image's aspect ratio as 1130/900 (1.2556), but the real PNG is
 // 1116x1409 (1.2625) — a small mismatch that compounds into visible
@@ -16,7 +30,7 @@ const MAP_IMG = "/AlohaRvParkMap.webp"; // Oct 13: same map, ~5x smaller file = 
 // the same saved position could look correctly aligned in one view but
 // off in another even though it's the same underlying % coordinate.
 // Update this if the map image is ever replaced with a different size.
-const MAP_ASPECT_RATIO = 1409 / 1116;
+let MAP_ASPECT_RATIO = 1409 / 1116;
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
@@ -1383,7 +1397,7 @@ export default function AlohaMap() {
 
   const [scale, setScale] = useState({ w: 900, h: 900 * MAP_ASPECT_RATIO });
   const scaleFactor = (scale.w || 900) / 900;
-  const [draftLots, setDraftLots] = useState(() => (MAP_CACHE && MAP_CACHE.lots && Object.keys(MAP_CACHE.lots).length > 0) ? MAP_CACHE.lots : LOTS);
+  const [draftLots, setDraftLots] = useState(() => (MAP_CACHE && MAP_CACHE.lots && Object.keys(MAP_CACHE.lots).length > 0) ? MAP_CACHE.lots : (HAS_CUSTOM_MAP ? {} : LOTS));
   // Oct 13 (per Mely): keep the lot overlays hidden until the map image AND the saved
   // positions/colors/statuses have loaded, so nothing jumps around on refresh.
   const [dataReady, setDataReady] = useState(() => !!(MAP_CACHE && MAP_CACHE.lots));
@@ -1397,7 +1411,7 @@ export default function AlohaMap() {
   // Oct 9: styled confirmation (replaces the browser's plain window.confirm popup)
   const [confirmDeleteLot, setConfirmDeleteLot] = useState(null);
   const [saveResult, setSaveResult] = useState(null);
-  const lastSavedLots = useRef(LOTS); // what the database held after the previous save/load
+  const lastSavedLots = useRef(HAS_CUSTOM_MAP ? {} : LOTS); // what the database held after the previous save/load
   const [activeEditLot, setActiveEditLot] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoUploadError, setPhotoUploadError] = useState("");
@@ -1572,6 +1586,9 @@ export default function AlohaMap() {
       try {
         const geo = geoRowsAll[0]?.data;
         if (geo && typeof geo === 'object' && Object.keys(geo).length > 0) { setDraftLots(geo); lastSavedLots.current = geo; }
+        // Oct 20: a park with its own uploaded map starts with no lots
+        // (never another park's default lots) until they are placed.
+        else if (HAS_CUSTOM_MAP) { setDraftLots({}); lastSavedLots.current = {}; }
       } catch (err) {
         console.error('Error loading lot positions:', err);
       }
@@ -1844,7 +1861,7 @@ export default function AlohaMap() {
             onLoad={() => setImgReady(true)}
             src={MAP_IMG}
             alt={`${companyProfile.company_name} Map`}
-            style={{ width:"100%", height:"auto", aspectRatio:"auto 1116 / 1409", display:"block", borderRadius:12, boxShadow:"0 4px 24px rgba(0,0,0,0.18)" }}
+            style={{ width:"100%", height:"auto", aspectRatio:`auto ${MAP_W} / ${MAP_H}`, display:"block", borderRadius:12, boxShadow:"0 4px 24px rgba(0,0,0,0.18)" }}
           />
           {/* Snap Lines */}
           {editMode && snapLines.x !== null && (
@@ -2326,6 +2343,32 @@ export default function AlohaMap() {
                 setNewLotName("");
               }} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontWeight:600 }}>Add</button>
             </div>
+            {/* Oct 20 (per Mely): lots that exist in the system (Generate
+                Spaces) but aren't on this map yet are lined up at the top
+                of the map so they can be dragged into place. */}
+            {(() => {
+              const missing = Object.keys(statuses).filter(k => !draftLots[k])
+                .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+              if (!missing.length) return null;
+              return (
+                <button onClick={() => {
+                  const sizes = Object.values(draftLots);
+                  const avg = (i, d) => sizes.length ? Math.round(sizes.reduce((t, v) => t + v[i], 0) / sizes.length * 10) / 10 : d;
+                  const w = Math.min(avg(2, 4), 8), h = Math.min(avg(3, 5), 10);
+                  const perRow = Math.max(1, Math.floor(96 / (w + 0.8)));
+                  setDraftLots(prev => {
+                    const next = { ...prev };
+                    missing.forEach((name, i) => {
+                      const col = i % perRow, row = Math.floor(i / perRow);
+                      next[name] = [Math.round((2 + col * (w + 0.8)) * 10) / 10, Math.round((2 + row * (h + 0.8)) * 10) / 10, w, h];
+                    });
+                    return next;
+                  });
+                }} style={{ marginTop:8, width:"100%", background:"#fff", color:"#166534", border:"1px solid #86efac", padding:"8px 12px", borderRadius:8, cursor:"pointer", fontWeight:600, fontSize:13 }}>
+                  Place missing lots ({missing.length}) at the top of the map
+                </button>
+              );
+            })()}
           </div>
           )}
 
