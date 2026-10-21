@@ -119,7 +119,7 @@ async function createReservationFromPublicOrder({
   });
 }
 
-export default async function handler(req, res) {
+async function handleEvent(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).end('Method not allowed');
@@ -135,6 +135,20 @@ export default async function handler(req, res) {
     console.error('Webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
+
+  // Oct 21 (per Mely — security hardening): each Stripe event is processed once per
+  // endpoint ('map'), so a retried/replayed delivery never records a payment twice.
+  // Fails open if the stripe_processed_events table doesn't exist yet.
+  {
+    const { error: claimErr } = await supabase.from('stripe_processed_events').insert({ event_id: event.id, source: 'map' });
+    if (claimErr && claimErr.code === '23505') {
+      const { data: prev } = await supabase.from('stripe_processed_events').select('status, created_at').eq('event_id', event.id).eq('source', 'map').maybeSingle();
+      const stuck = prev && prev.status !== 'done' && Date.now() - new Date(prev.created_at).getTime() > 10 * 60 * 1000;
+      if (!stuck) return res.status(200).json({ received: true, duplicate: true });
+      await supabase.from('stripe_processed_events').update({ created_at: new Date().toISOString() }).eq('event_id', event.id).eq('source', 'map');
+    }
+  }
+  req._claimedEventId = event.id;
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
@@ -548,4 +562,19 @@ export default async function handler(req, res) {
   }
 
   return res.status(200).json({ received: true });
+}
+
+// Oct 21 (per Mely — security hardening): mark the claimed event done when it was
+// handled, or release the claim if it failed so Stripe's retry can process it.
+export default async function handler(req, res) {
+  try {
+    await handleEvent(req, res);
+  } catch (e) {
+    if (req._claimedEventId) await supabase.from('stripe_processed_events').delete().eq('event_id', req._claimedEventId).eq('source', 'map').then(() => {}, () => {});
+    throw e;
+  }
+  if (req._claimedEventId) {
+    if (res.statusCode < 500) await supabase.from('stripe_processed_events').update({ status: 'done', finished_at: new Date().toISOString() }).eq('event_id', req._claimedEventId).eq('source', 'map').then(() => {}, () => {});
+    else await supabase.from('stripe_processed_events').delete().eq('event_id', req._claimedEventId).eq('source', 'map').then(() => {}, () => {});
+  }
 }
