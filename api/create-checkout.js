@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
     const { data: company } = await supabase
       .from('companies')
-      .select('id')
+      .select('id, is_demo, domain')
       .eq('park_id', parkId || 'aloha')
       .single();
 
@@ -137,6 +137,11 @@ export default async function handler(req, res) {
       quantity: 1,
     });
 
+    // Oct 21 (per Mely — demo.melyos.io is public): demo companies never take a real card payment.
+    if (company && (company.is_demo === true || /(^|\.)melyos\.io$/i.test(String(company.domain || '')))) {
+      return res.status(403).json({ error: 'This is a demo website — online payments are turned off. No card was charged.' });
+    }
+    
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],

@@ -74,7 +74,7 @@ export default async function handler(req, res) {
     // Aloha gets the real charge, MelyOS keeps only the processing fee.
     const { data: companyRow } = await supabase
       .from('companies')
-      .select('id')
+      .select('id, is_demo, domain')
       .eq('park_id', PARK_ID)
       .maybeSingle();
     const { data: parkSettingsRow } = await supabase
@@ -91,6 +91,11 @@ export default async function handler(req, res) {
     ].filter(Boolean).join(' · ');
 
     let session;
+
+    // Oct 21 (per Mely — demo.melyos.io is public): demo companies never take a real card payment.
+    if (companyRow && (companyRow.is_demo === true || /(^|\.)melyos\.io$/i.test(String(companyRow.domain || '')))) {
+      return res.status(403).json({ error: 'This is a demo website — online payments are turned off. No card was charged.' });
+    }
 
     if (isSubscription) {
       session = await stripe.checkout.sessions.create({
