@@ -14,8 +14,8 @@ jobs:
           URLS: ${{ github.event.inputs.urls }}
         run: |
           for u in $URLS; do
-            for ua in "WhatsApp/2.23.20.0 A" "facebookexternalhit/1.1"; do
-              R=$(curl -s -o page.html -w "%{http_code} %{time_total}s %{size_download}B" -A "$ua" "$u"); case "$u" in *api/save-map-element*) echo "::notice title=json::$(head -c 700 page.html)";; esac
+            for ua in "WhatsApp/2.23.20.0 A"; do
+              R=$(curl -s -o page.html -w "%{http_code} %{time_total}s %{size_download}B" -A "$ua" "$u"); case "$u" in *api/save-map-element*) echo "::notice title=json::$(head -c 3800 page.html)";; esac
               OG=$(grep -o "<meta property=\"og:\(image\|description\)\"[^>]*>" page.html | head -2 | tr "\n" " ")
               IDX=$(grep -bo 'og:image' page.html | head -1 | cut -d: -f1)
               echo "::notice title=$u [${ua%%/*}]::$R | og:image at byte ${IDX:-none} | ${OG:0:600}"
