@@ -25,12 +25,19 @@ function isDateInSeason(dateStr, startMonthDay, endMonthDay) {
 async function getAvailability(req, res) {
   const { lotId } = req.query;
   if (!lotId) return res.status(400).json({ error: 'Missing lot ID' });
+  // Oct 21 (per Mely): the same lot name (A1, B2…) exists in more than one park
+  // (Aloha and the demo), so the lot must be looked up inside THIS park only —
+  // otherwise .single() fails and the calendar shows every date as open.
+  const parkId = req.query.park_id || 'aloha';
+  const { data: company } = await supabase.from('companies').select('id').eq('park_id', parkId).maybeSingle();
+  if (!company) return res.status(404).json({ error: 'Park not found' });
 
   const { data: lotRow, error: lotErr } = await supabase
     .from('rv_lots')
     .select('id')
+    .eq('company_id', company.id)
     .eq('lot_name', lotId)
-    .single();
+    .maybeSingle();
 
   if (lotErr || !lotRow) return res.status(404).json({ error: 'Lot not found' });
 

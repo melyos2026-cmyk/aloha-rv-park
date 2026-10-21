@@ -416,7 +416,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
   }, [lot]);
 
   useEffect(() => {
-    fetch('/api/lot-data?type=availability&lotId=' + encodeURIComponent(lot))
+    fetch('/api/lot-data?type=availability&lotId=' + encodeURIComponent(lot) + '&park_id=' + encodeURIComponent(PARK_ID))
       .then(res => res.json())
       .then(data => {
         setBookedRanges(Array.isArray(data) ? data : []);
