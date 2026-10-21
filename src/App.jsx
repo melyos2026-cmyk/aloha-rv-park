@@ -378,6 +378,9 @@ function calcStayPreview(arrivalStr, departureStr, hasWeekly) {
   return { isYearly: false, months, weeks, extraDays, totalNights };
 }
 
+// Oct 21 (per Mely): sample lot photo for demo parks (lots without their own photo).
+const DEFAULT_LOT_PHOTO = { "sunset-ridge": "https://demo.melyos.io/demo-lot-photo.jpg" };
+
 function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requiresCallOffice, onClose }) {
   const [form, setForm] = useState({ arrival: "", departure: "", rvLength: "", slideOutDriverCount: "", slideOutPassengerCount: "" });
   const [longStay, setLongStay] = useState(false);
@@ -648,8 +651,10 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
           </div>
         )}
 
-        {lotInfo?.photo_url && (
-          <img src={lotInfo.photo_url} alt="Lot" style={{ width:"100%", maxHeight:220, objectFit:"cover", borderRadius:10, marginBottom:16 }} />
+        {/* Oct 21 (per Mely): demo parks show a sample lot photo on every lot card
+            that has no photo of its own (storage lots S1–S6 use a different card). */}
+        {(lotInfo?.photo_url || DEFAULT_LOT_PHOTO[PARK_ID]) && (
+          <img src={lotInfo?.photo_url || DEFAULT_LOT_PHOTO[PARK_ID]} alt="Lot" style={{ width:"100%", maxHeight:220, objectFit:"cover", borderRadius:10, marginBottom:16 }} />
         )}
 
         {canBookStatus && (lotInfo?.max_length_ft || lotInfo?.amp_service || (lotInfo?.max_driver_slide_outs && lotInfo.max_driver_slide_outs !== "Any") || (lotInfo?.max_passenger_slide_outs && lotInfo.max_passenger_slide_outs !== "Any")) && (
