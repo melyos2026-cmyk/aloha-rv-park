@@ -1,0 +1,22 @@
+# Oct 21 (per Mely): read-only test of a website's public Mely chat (asks one question, prints the answer).
+name: Chat check
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'Chat endpoint, e.g. https://demo.melyos.io/api/mely-chat'
+        required: true
+      question:
+        description: 'Question to ask'
+        required: true
+jobs:
+  ask:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          URL: ${{ github.event.inputs.url }}
+          Q: ${{ github.event.inputs.question }}
+        run: |
+          BODY=$(jq -n --arg q "$Q" '{messages:[{role:"user",text:$q,content:$q}], sessionId:"ci-check"}')
+          R=$(curl -s -m 90 -X POST -H "Content-Type: application/json" -d "$BODY" "$URL")
+          echo "::notice title=answer::$(echo "$R" | head -c 3000 | tr '\n' ' ')"
