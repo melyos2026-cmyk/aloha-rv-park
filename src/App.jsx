@@ -387,8 +387,11 @@ const DEFAULT_LOT_PHOTO = { "sunset-ridge": DEMO_LOT_PHOTO };
 const lotPhoto = (url) => (url && url.includes("demo-lot-photo.jpg") ? DEMO_LOT_PHOTO : url) || DEFAULT_LOT_PHOTO[PARK_ID] || null;
 
 function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requiresCallOffice, prefill, onClose }) {
-  // Oct 22 (per Mely): dates from the search bar come pre-filled (stays over 32 nights go to Apply, as before).
-  const prefillLong = !!(prefill && prefill.arrival && prefill.departure && Math.round((new Date(prefill.departure + "T00:00:00") - new Date(prefill.arrival + "T00:00:00")) / 86400000) > 32);
+  // Oct 22 (per Mely — "estadía de más de 15 días, no 32 noches"): any stay longer than the park's
+  // application threshold (Lease Defaults, default 15 days) goes to Apply. Dates from the search
+  // bar come pre-filled.
+  const longStayDays = Number(parkSettings?.lease_defaults?.background_check_threshold_days) || 15;
+  const prefillLong = !!(prefill && prefill.arrival && prefill.departure && Math.round((new Date(prefill.departure + "T00:00:00") - new Date(prefill.arrival + "T00:00:00")) / 86400000) > longStayDays);
   const [form, setForm] = useState({ arrival: prefill?.arrival || "", departure: prefillLong ? "" : (prefill?.departure || ""), rvLength: prefill?.rvLength ? String(prefill.rvLength) : "", slideOutDriverCount: "", slideOutPassengerCount: "" });
   const [longStay, setLongStay] = useState(prefillLong);
   const [loading, setLoading] = useState(false);
@@ -987,7 +990,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
               onChange={(date) => {
                 const newDeparture = date ? date.toISOString().split("T")[0] : "";
                 const tentative = newDeparture && form.arrival ? calcStayPreview(form.arrival, newDeparture, hasWeekly) : null;
-                if (tentative && !tentative.isYearly && tentative.totalNights > 32) {
+                if (tentative && (tentative.isYearly || tentative.totalNights > longStayDays)) {
                   setLongStay(true);
                   setForm({...form, departure: ""});
                   return;
