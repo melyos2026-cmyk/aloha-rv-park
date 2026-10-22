@@ -196,7 +196,8 @@ async function loadParkSettings() {
   const companyId = await getCompanyId();
   if (!companyId) return null;
 
-  const res = await fetch(SUPABASE_URL + '/rest/v1/park_settings?company_id=eq.' + companyId, {
+  // Oct 22 (security): only the public booking settings (never payment account details).
+  const res = await fetch(SUPABASE_URL + '/rest/v1/park_settings?select=checkin_time,checkout_time,cancellation_days,lease_defaults&company_id=eq.' + companyId, {
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
   });
   if (!res.ok) return null;
@@ -1093,7 +1094,7 @@ function MyReservationsModal({ parkSettings, onClose }) {
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/lot-data?type=my-bookings&email=' + encodeURIComponent(email));
+      const res = await fetch('/api/lot-data?type=my-bookings&email=' + encodeURIComponent(email) + '&park_id=' + encodeURIComponent(PARK_ID));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not fetch bookings');
       setBookings(data);

@@ -203,11 +203,15 @@ async function getMyBookings(req, res) {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  const { data, error } = await supabase
+  // Oct 22 (security): only bookings at THIS park (older Aloha orders have no park saved).
+  const parkId = String(req.query.park_id || 'aloha').replace(/[^a-z0-9_-]/gi, '');
+  let q = supabase
     .from('lot_orders')
     .select('id, lot_id, arrival_date, departure_date, amount_total, status, created_at')
     .eq('customer_email', email)
-    .eq('status', 'paid')
+    .eq('status', 'paid');
+  q = parkId === 'aloha' ? q.or('park_id.eq.aloha,park_id.is.null') : q.eq('park_id', parkId);
+  const { data, error } = await q
     .gte('departure_date', todayStr)
     .order('arrival_date', { ascending: true });
 

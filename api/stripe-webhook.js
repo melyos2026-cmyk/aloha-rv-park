@@ -407,10 +407,18 @@ async function handleEvent(req, res) {
       // email/date range instead.
       const { productId, quantity, lotId, park, residentLot, taxCents } = session.metadata || {};
 
+      // Oct 22 (security, per Mely): only real propane sales are handled here. Other payments
+      // (invoices, applications, marina, etc.) belong to the website's webhook and used to be
+      // saved here as fake Aloha propane orders.
+      if (!productId) {
+        return res.status(200).json({ received: true, ignored: 'not a propane sale' });
+      }
+
       try {
         const qrToken = crypto.randomBytes(16).toString('hex');
         const customerEmail = session.customer_details?.email || null;
-        const { error } = await supabase.from('propane_orders').upsert(
+        // Insert only once: never replace the QR code a customer already received.
+        const { data: insertedRows, error } = await supabase.from('propane_orders').upsert(
           {
             park_id: park || 'aloha',
             lot_id: lotId || null,
@@ -430,8 +438,11 @@ async function handleEvent(req, res) {
             resident_lot_name: residentLot || null,
             tax_amount: taxCents != null ? Number(taxCents) / 100 : null,
           },
-          { onConflict: 'stripe_session_id' }
-        );
+          { onConflict: 'stripe_session_id', ignoreDuplicates: true }
+        ).select('id');
+        if (!error && (!insertedRows || insertedRows.length === 0)) {
+          return res.status(200).json({ received: true, ignored: 'propane order already saved' });
+        }
 
         if (error) {
           console.error('Supabase insert error:', error);
