@@ -112,11 +112,24 @@ export default async function handler(req, res) {
     }
 
     // Check for overlapping paid reservations OR active resident leases on this lot
+    // Oct 22 (per Mely — payments must never cross between companies): resolve the
+    // company first and look the lot up INSIDE that company. Lot names (A1, 12…) repeat
+    // across parks, so a lookup by name alone could price/book another park's lot.
+    const { data: lotCompany } = await supabase
+      .from('companies')
+      .select('id')
+      .eq('park_id', PARK_ID)
+      .maybeSingle();
+    if (!lotCompany) {
+      return res.status(404).json({ error: 'Park not found' });
+    }
+
     const { data: lotRow, error: lotRowErr } = await supabase
       .from('rv_lots')
       .select('id, status, max_length_ft, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, use_seasonal_pricing, weekly_high_season_price, weekly_low_season_price, daily_high_season_price, daily_low_season_price')
+      .eq('company_id', lotCompany.id)
       .eq('lot_name', lotId)
-      .single();
+      .maybeSingle();
 
     if (lotRowErr || !lotRow) {
       return res.status(404).json({ error: 'Lot not found' });

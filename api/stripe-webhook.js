@@ -245,9 +245,10 @@ async function handleEvent(req, res) {
               const { data: company } = await supabase
                 .from('companies')
                 .select('id')
-                .eq('park_id', 'aloha')
-                .single();
+                .eq('park_id', parkId || 'aloha')
+                .maybeSingle();
 
+              // Oct 22 (per Mely): the alert goes to the park that was booked, not always Aloha.
               if (company) {
                 await supabase.from('resident_update_notifications').insert({
                   company_id: company.id,
@@ -274,7 +275,7 @@ async function handleEvent(req, res) {
         const isLongTerm = isYearly === 'true' || parseInt(months, 10) > 0;
         const todayStr = new Date().toISOString().split('T')[0];
         if (lotId && arrivalDate && arrivalDate <= todayStr) {
-          await updateLotStatus(lotId, isLongTerm ? 'occupied' : 'reserved');
+          await updateLotStatus(lotId, isLongTerm ? 'occupied' : 'reserved', parkId || 'aloha');
         }
 
         // Aug 14 (per Mely — real gap found: public self-service bookings
@@ -293,6 +294,7 @@ async function handleEvent(req, res) {
             customerName: session.customer_details?.name || null,
             customerPhone: session.customer_details?.phone || null,
             stripeSessionId: session.id,
+            parkId: parkId || 'aloha',
           });
         } catch (reservationErr) {
           // Never let this block the payment/lot_orders flow above, which
@@ -304,7 +306,9 @@ async function handleEvent(req, res) {
         console.error('Error saving lot order:', err);
       }
     } else if (service === 'rv_storage') {
-      const { billingType, quantity, isSubscription, lotId } = session.metadata || {};
+      const { billingType, quantity, isSubscription, lotId, park_id: storageParkId } = session.metadata || {};
+      // Oct 22 (per Mely): everything below stays inside the park that was paid.
+      const { data: storageCompany } = await supabase.from('companies').select('id').eq('park_id', storageParkId || 'aloha').maybeSingle();
 
       try {
         const { error } = await supabase.from('storage_orders').upsert(
@@ -328,17 +332,19 @@ async function handleEvent(req, res) {
         }
 
         if (lotId) {
-          await updateLotStatus(lotId, 'reserved');
+          await updateLotStatus(lotId, 'reserved', storageParkId || 'aloha');
         }
 
         // Try to link this storage payment to a resident and create/update
         // a recurring charge so it auto-appears on future monthly invoices.
         const customerEmail = session.customer_details?.email || null;
-        if (customerEmail && isSubscription === 'true') {
+        if (customerEmail && isSubscription === 'true' && storageCompany) {
           const { data: resident } = await supabase
             .from('resident_accounts')
             .select('id, company_id')
+            .eq('company_id', storageCompany.id)
             .eq('email', customerEmail)
+            .limit(1)
             .maybeSingle();
 
           if (resident) {

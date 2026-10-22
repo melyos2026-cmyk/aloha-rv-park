@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import PropaneCheckoutModal from './components/PropaneCheckoutModal';
 import StorageCheckoutModal from './components/StorageCheckoutModal';
+import LotSearch from './components/LotSearch';
 import LotCheckoutModal from './components/LotCheckoutModal';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -384,9 +385,11 @@ const DEMO_LOT_PHOTO = "/demo-lot-photo.jpg";
 const DEFAULT_LOT_PHOTO = { "sunset-ridge": DEMO_LOT_PHOTO };
 const lotPhoto = (url) => (url && url.includes("demo-lot-photo.jpg") ? DEMO_LOT_PHOTO : url) || DEFAULT_LOT_PHOTO[PARK_ID] || null;
 
-function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requiresCallOffice, onClose }) {
-  const [form, setForm] = useState({ arrival: "", departure: "", rvLength: "", slideOutDriverCount: "", slideOutPassengerCount: "" });
-  const [longStay, setLongStay] = useState(false);
+function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requiresCallOffice, prefill, onClose }) {
+  // Oct 22 (per Mely): dates from the search bar come pre-filled (stays over 32 nights go to Apply, as before).
+  const prefillLong = !!(prefill && prefill.arrival && prefill.departure && Math.round((new Date(prefill.departure + "T00:00:00") - new Date(prefill.arrival + "T00:00:00")) / 86400000) > 32);
+  const [form, setForm] = useState({ arrival: prefill?.arrival || "", departure: prefillLong ? "" : (prefill?.departure || ""), rvLength: prefill?.rvLength ? String(prefill.rvLength) : "", slideOutDriverCount: "", slideOutPassengerCount: "" });
+  const [longStay, setLongStay] = useState(prefillLong);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [bookedRanges, setBookedRanges] = useState([]);
@@ -1265,6 +1268,10 @@ export default function AlohaMap() {
   const [reservedDates, setReservedDates] = useState({});
   const [hover, setHover] = useState(null);
   const [selected, setSelected] = useState(null);
+  // Oct 22 (per Mely): Expedia-style date search above the map.
+  const [lotSearch, setLotSearch] = useState(null);
+  const searchFree = lotSearch ? new Set((lotSearch.results || []).map((r) => r.lot)) : null;
+  const searchPrefill = lotSearch ? { arrival: lotSearch.arrival, departure: lotSearch.departure, rvLength: lotSearch.rvLength || "" } : null;
   const [selectedStorageLot, setSelectedStorageLot] = useState(null);
   const [payLotSelected, setPayLotSelected] = useState(null);
   const [confirmed, setConfirmed] = useState(null);
@@ -1775,6 +1782,14 @@ export default function AlohaMap() {
           Click any <span style={{ color:"#16a34a" }}>🟢 green</span> or <span style={{ color:"#ca8a04" }}>🟡 orange</span> lot to check availability and reserve it. Hover to see the lot number.
         </p>
       </div>
+      {!editMode && (
+        <LotSearch
+          parkId={PARK_ID}
+          search={lotSearch}
+          onResults={setLotSearch}
+          onPick={(lot) => setSelected({ lot, status: "available", prefill: searchPrefill })}
+        />
+      )}
       </div>
 
       {canEditMap && editMode && (
@@ -1983,8 +1998,10 @@ export default function AlohaMap() {
                 onClick={() => {
                   if (lot.startsWith("S")) {
                     setSelectedStorageLot({ lot, status });
+                  } else if (searchFree && searchFree.has(lot)) {
+                    setSelected({ lot, status: "available", prefill: searchPrefill });
                   } else {
-                    setSelected({ lot, status });
+                    setSelected({ lot, status, prefill: searchPrefill });
                   }
                 }}
                 onMouseEnter={() => setHover(lot)}
@@ -1994,11 +2011,14 @@ export default function AlohaMap() {
                   position:"absolute",
                   left:`${x}%`, top:`${y}%`,
                   width:`${w}%`, height:`${h}%`,
-                  background: lotColors[lot] ? lotColors[lot] : isHov ? STATUS_COLORS[status].replace(/[\d.]+\)$/, "0.88)") : STATUS_COLORS[status],
+                  background: searchFree
+                    ? (searchFree.has(lot) ? (isHov ? "rgba(22,163,74,0.95)" : "rgba(34,197,94,0.85)") : "rgba(107,114,128,0.35)")
+                    : lotColors[lot] ? lotColors[lot] : isHov ? STATUS_COLORS[status].replace(/[\d.]+\)$/, "0.88)") : STATUS_COLORS[status],
                   borderRadius: borderRadius,
                   clipPath: clipPath,
                   cursor: "pointer",
-                  border: isHov ? "2px solid rgba(255,255,255,0.9)" : "1.5px solid rgba(255,255,255,0.45)",
+                  border: searchFree && searchFree.has(lot) ? "2.5px solid #fff" : isHov ? "2px solid rgba(255,255,255,0.9)" : "1.5px solid rgba(255,255,255,0.45)",
+                  boxShadow: searchFree && searchFree.has(lot) ? "0 0 0 2px rgba(22,163,74,0.9)" : undefined,
                   display:"flex", alignItems:"center", justifyContent:"center",
                   transition:"all 0.12s",
                   zIndex: isHov ? 20 : 1,
@@ -2885,6 +2905,7 @@ export default function AlohaMap() {
           parkSettings={parkSettings}
           reservedUntil={reservedDates[selected.lot]}
           requiresCallOffice={!!bookingDisabled[selected.lot]}
+          prefill={selected.prefill || null}
           onClose={() => setSelected(null)}
         />
       )}

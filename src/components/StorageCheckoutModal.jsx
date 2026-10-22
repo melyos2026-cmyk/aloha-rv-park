@@ -56,6 +56,8 @@ export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // Oct 22 (per Mely): pay the park whose map this is, never another one.
+          parkId: (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('park_id')) || 'aloha',
           lotId,
           billingType,
           quantity,

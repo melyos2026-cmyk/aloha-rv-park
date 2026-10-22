@@ -10,7 +10,9 @@ const supabase = createClient(
 const INTERVAL_MAP = { daily: 'day', monthly: 'month', yearly: 'year' };
 const LABEL_MAP = { daily: 'Daily', monthly: 'Monthly', yearly: 'Yearly' };
 const UNIT_LABEL = { daily: 'day(s)', monthly: 'month(s)', yearly: 'year(s)' };
-const PARK_ID = 'aloha';
+// Oct 22 (per Mely): the park comes from the request (the map's ?park_id=), so a storage
+// space on another park's map is never booked or paid to Aloha. Old links default to Aloha.
+const parkFrom = (body) => String((body && body.parkId) || 'aloha').replace(/[^a-z0-9_-]/gi, '').slice(0, 60) || 'aloha';
 
 // Aug 6 (per Mely): same processing-fee model as every other charge in the
 // system — 4% of the charge, or a $1.50 fixed minimum, whichever is
@@ -27,6 +29,7 @@ export default async function handler(req, res) {
 
   try {
     const { lotId, billingType, quantity, isSubscription, customerEmail } = req.body || {};
+    const PARK_ID = parkFrom(req.body);
 
     if (!lotId) {
       return res.status(400).json({ error: 'Missing lot ID' });
@@ -135,6 +138,7 @@ export default async function handler(req, res) {
           quantity: '1',
           isSubscription: 'true',
           park: 'aloha-rv-park',
+          park_id: PARK_ID,
           service: 'rv_storage',
         },
         success_url: `${origin}/?park_id=${PARK_ID}&storage_payment=success&session_id={CHECKOUT_SESSION_ID}`,
@@ -189,6 +193,7 @@ export default async function handler(req, res) {
           quantity: String(qty),
           isSubscription: 'false',
           park: 'aloha-rv-park',
+          park_id: PARK_ID,
           service: 'rv_storage',
         },
         success_url: `${origin}/?park_id=${PARK_ID}&storage_payment=success&session_id={CHECKOUT_SESSION_ID}`,
