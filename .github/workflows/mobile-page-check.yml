@@ -1,0 +1,41 @@
+# Oct 23 (per Mely): read-only — open a page in headless mobile Chrome and report load errors.
+name: Mobile page check
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: 'Space-separated URLs'
+        required: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm i -s playwright@1.47.2 && npx playwright install --with-deps chromium >/dev/null 2>&1
+      - env:
+          URLS: ${{ github.event.inputs.urls }}
+        run: |
+          for u in $URLS; do
+            R=$(curl -s -o page.html -w "%{http_code} %{size_download}B" -A "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36" "$u"; echo " curl_exit=$?")
+            echo "::notice title=curl $u::$R | last100=$(tail -c 100 page.html | tr -d '\n')"
+          done
+          cat > check.mjs <<'JS'
+          import { chromium, devices } from "playwright";
+          const b = await chromium.launch(); const ctx = await b.newContext({ ...devices["Pixel 7"] });
+          for (const u of process.env.URLS.split(/\s+/).filter(Boolean)) {
+            const p = await ctx.newPage(); const errs = [];
+            p.on("pageerror", e => errs.push("pageerror: " + e.message.slice(0, 300)));
+            p.on("console", m => { if (m.type() === "error") errs.push("console: " + m.text().slice(0, 300)); });
+            p.on("requestfailed", r => errs.push("reqfail: " + r.url().slice(0, 120) + " " + (r.failure()?.errorText || "")));
+            let status = "?", crashed = "";
+            p.on("crash", () => crashed = "CRASHED");
+            try { const r = await p.goto(u, { waitUntil: "networkidle", timeout: 45000 }); status = r?.status(); } catch (e) { errs.push("goto: " + String(e).slice(0, 300)); }
+            const h1 = await p.locator("h1").first().textContent().catch(() => "");
+            const cards = await p.locator(".mr-store-card").count().catch(() => -1);
+            console.log(`::notice title=browser ${u}::status=${status} ${crashed} h1=${JSON.stringify(h1)} cards=${cards} errors=${errs.length} ${errs.slice(0, 6).join(" || ")}`);
+            await p.close();
+          }
+          await b.close();
+          JS
+          node check.mjs
