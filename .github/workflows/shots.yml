@@ -1,0 +1,32 @@
+# Oct 24 (per Mely): read-only screenshots of a page at phone / tablet / desktop widths.
+name: Page screenshots
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL'
+        required: true
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm i -s playwright@1.47.2 && npx playwright install --with-deps chromium >/dev/null 2>&1
+      - env:
+          URL: ${{ github.event.inputs.url }}
+        run: |
+          cat > shot.mjs <<'JS'
+          import { chromium } from "playwright";
+          const b = await chromium.launch();
+          for (const [name, w, h, mobile] of [["phone", 390, 844, true], ["tablet", 820, 1180, true], ["desktop", 1366, 900, false]]) {
+            const ctx = await b.newContext({ viewport: { width: w, height: h }, isMobile: mobile, deviceScaleFactor: 1 });
+            const p = await ctx.newPage(); await p.goto(process.env.URL, { waitUntil: "networkidle", timeout: 60000 });
+            await p.addStyleTag({ content: ".ck-banner,.ck-bar,[class*=cookie]{display:none!important}" }).catch(() => {});
+            await p.screenshot({ path: `${name}.png`, fullPage: true }); await ctx.close();
+          }
+          await b.close();
+          JS
+          node shot.mjs
+      - uses: actions/upload-artifact@v4
+        with: { name: shots, path: "*.png", retention-days: 1 }
