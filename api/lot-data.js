@@ -252,6 +252,15 @@ function calcStaySplit(arrivalStr, departureStr, hasWeekly) {
   return { isYearly: false, months, weeks, extraDays: rest - weeks * 7, totalNights };
 }
 
+// A lot's max_driver_slide_outs / max_passenger_slide_outs is "Any" (or empty) when the
+// side has no limit, otherwise "0".."3" or "4+". The visitor sends the same shape. Same
+// rule the booking window uses, so the search can't offer a lot checkout would reject.
+function fitsSlideOuts(lotMax, count) {
+  if (!count) return true;                       // not asked: don't filter
+  if (!lotMax || lotMax === 'Any') return true;  // lot takes any number
+  return Number(String(count).replace('+', '')) <= Number(String(lotMax).replace('+', ''));
+}
+
 function inSeason(dateStr, start, end) {
   if (!start || !end) return false;
   const md = dateStr.slice(5);
@@ -263,6 +272,8 @@ async function searchLots(req, res) {
   const arrival = String(req.query.arrival || '');
   const departure = String(req.query.departure || '');
   const rvLength = Number(req.query.rv_length) || 0;
+  const driverSlideOuts = String(req.query.driver_slide_outs || '');
+  const passengerSlideOuts = String(req.query.passenger_slide_outs || '');
   const iso = /^\d{4}-\d{2}-\d{2}$/;
   if (!iso.test(arrival) || !iso.test(departure) || departure <= arrival) {
     return res.status(400).json({ error: 'Choose an arrival and a departure date.' });
@@ -277,7 +288,7 @@ async function searchLots(req, res) {
 
   const [{ data: lots, error: lotsErr }, { data: settings }, { data: infos }] = await Promise.all([
     supabase.from('rv_lots')
-      .select('id, lot_name, status, online_booking_disabled, max_length_ft, amp_service, photo_url, description, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, use_seasonal_pricing, weekly_high_season_price, weekly_low_season_price, daily_high_season_price, daily_low_season_price')
+      .select('id, lot_name, status, online_booking_disabled, max_length_ft, amp_service, max_driver_slide_outs, max_passenger_slide_outs, photo_url, description, base_price, high_season_price, low_season_price, daily_rate, weekly_rate, use_seasonal_pricing, weekly_high_season_price, weekly_low_season_price, daily_high_season_price, daily_low_season_price')
       .eq('company_id', company.id),
     supabase.from('park_settings')
       .select('lease_defaults, high_season_start_month_day, high_season_end_month_day')
@@ -293,7 +304,9 @@ async function searchLots(req, res) {
     !/^S/i.test(l.lot_name) &&
     !['maintenance', 'for_sale', 'for_rent'].includes(l.status) &&
     !l.online_booking_disabled && !phoneOnly.has(l.lot_name) &&
-    (!rvLength || !l.max_length_ft || Number(l.max_length_ft) >= rvLength));
+    (!rvLength || !l.max_length_ft || Number(l.max_length_ft) >= rvLength) &&
+    fitsSlideOuts(l.max_driver_slide_outs, driverSlideOuts) &&
+    fitsSlideOuts(l.max_passenger_slide_outs, passengerSlideOuts));
 
   const a = new Date(arrival + 'T00:00:00');
   const d = new Date(departure + 'T00:00:00');
@@ -330,6 +343,8 @@ async function searchLots(req, res) {
     }
     return {
       lot: l.lot_name, max_length_ft: l.max_length_ft || null, amp_service: l.amp_service || null,
+      max_driver_slide_outs: l.max_driver_slide_outs || 'Any',
+      max_passenger_slide_outs: l.max_passenger_slide_outs || 'Any',
       photo_url: l.photo_url || null, description: l.description || '',
       nightly: daily || null, total, apply, nights: stay.totalNights,
     };

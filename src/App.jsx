@@ -392,7 +392,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
   // bar come pre-filled.
   const longStayDays = Number(parkSettings?.lease_defaults?.background_check_threshold_days) || 15;
   const prefillLong = !!(prefill && prefill.arrival && prefill.departure && Math.round((new Date(prefill.departure + "T00:00:00") - new Date(prefill.arrival + "T00:00:00")) / 86400000) > longStayDays);
-  const [form, setForm] = useState({ arrival: prefill?.arrival || "", departure: prefillLong ? "" : (prefill?.departure || ""), rvLength: prefill?.rvLength ? String(prefill.rvLength) : "", slideOutDriverCount: "", slideOutPassengerCount: "" });
+  const [form, setForm] = useState({ arrival: prefill?.arrival || "", departure: prefillLong ? "" : (prefill?.departure || ""), rvLength: prefill?.rvLength ? String(prefill.rvLength) : "", slideOutDriverCount: prefill?.slideOutDriverCount || "", slideOutPassengerCount: prefill?.slideOutPassengerCount || "" });
   const [longStay, setLongStay] = useState(prefillLong);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -1275,7 +1275,10 @@ export default function AlohaMap() {
   // Oct 22 (per Mely): Expedia-style date search above the map.
   const [lotSearch, setLotSearch] = useState(null);
   const searchFree = lotSearch ? new Set((lotSearch.results || []).map((r) => r.lot)) : null;
-  const searchPrefill = lotSearch ? { arrival: lotSearch.arrival, departure: lotSearch.departure, rvLength: lotSearch.rvLength || "" } : null;
+  const searchPrefill = lotSearch ? {
+    arrival: lotSearch.arrival, departure: lotSearch.departure, rvLength: lotSearch.rvLength || "",
+    slideOutDriverCount: lotSearch.driverSlideOuts || "", slideOutPassengerCount: lotSearch.passengerSlideOuts || "",
+  } : null;
   const [selectedStorageLot, setSelectedStorageLot] = useState(null);
   const [payLotSelected, setPayLotSelected] = useState(null);
   const [confirmed, setConfirmed] = useState(null);
@@ -1290,6 +1293,7 @@ export default function AlohaMap() {
   }, []);
   const containerRef = useRef(null);
   const aboveMapRef = useRef(null);
+  const reportHeightRef = useRef(null);
   const [previewWidth, setPreviewWidth] = useState(null); // null = actual device width; 900/390 = forced preview
   const [zoomLevel, setZoomLevel] = useState(1);
   // Aug 12 (per Mely): real Pan & Zoom for the guest-facing map — separate
@@ -1568,6 +1572,7 @@ export default function AlohaMap() {
     // settle delays (fonts/layout can shift slightly right after mount)
     // then stopped for good — never a continuous loop, so it can't
     // drift into a stale/wrong value like the old mechanism did.
+    reportHeightRef.current = reportNaturalHeight;
     function reportNaturalHeight() {
       const aboveHeight = aboveMapRef.current?.offsetHeight || 0;
       const contentWidth = containerRef.current?.offsetWidth;
@@ -1588,6 +1593,13 @@ export default function AlohaMap() {
       window.removeEventListener("resize", reportNaturalHeight);
     };
   }, []);
+
+  // Oct 28: searching opens a strip of lot cards above the map, which makes the page
+  // taller than it was at mount — re-measure so the website resizes the frame to match.
+  useEffect(() => {
+    const t = setTimeout(() => reportHeightRef.current?.(), 50);
+    return () => clearTimeout(t);
+  }, [lotSearch]);
 
   useEffect(() => {
     const update = () => {
@@ -1765,6 +1777,16 @@ export default function AlohaMap() {
     }}>
       <style>{emojiHoverStyle}</style>
       <div ref={aboveMapRef}>
+      {/* Oct 28 (per Mely): the search sits above the map on its own white band — it reads
+          as part of the page, not as something inside the map. */}
+      {!editMode && (
+        <LotSearch
+          parkId={PARK_ID}
+          search={lotSearch}
+          onResults={setLotSearch}
+          onPick={(lot) => setSelected({ lot, status: "available", prefill: searchPrefill })}
+        />
+      )}
       {/* Header */}
       <div className="map-header" style={{ background:"linear-gradient(135deg,#14532d,#16a34a)", padding:"24px" }}>
         <div>
@@ -1786,14 +1808,6 @@ export default function AlohaMap() {
           Click any <span style={{ color:"#16a34a" }}>🟢 green</span> or <span style={{ color:"#ca8a04" }}>🟡 orange</span> lot to check availability and reserve it. Hover to see the lot number.
         </p>
       </div>
-      {!editMode && (
-        <LotSearch
-          parkId={PARK_ID}
-          search={lotSearch}
-          onResults={setLotSearch}
-          onPick={(lot) => setSelected({ lot, status: "available", prefill: searchPrefill })}
-        />
-      )}
       </div>
 
       {canEditMap && editMode && (
@@ -1843,6 +1857,7 @@ export default function AlohaMap() {
             width: "100%",
             height: isFixedFrame ? "100%" : undefined,
             maxWidth: previewWidth || 900,
+            ...(editMode ? {} : { border: "2px solid #111", borderRadius: 8, background: "#fff" }),
             touchAction: !editMode && mapScale > minScale ? "none" : "auto",
             cursor: isPanning ? "grabbing" : (!editMode && mapScale > minScale ? "grab" : "default"),
           }}
