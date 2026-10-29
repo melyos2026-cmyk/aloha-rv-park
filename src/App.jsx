@@ -1263,7 +1263,38 @@ const emojiHoverStyle = `
     width: 100%;
     gap: 12px 16px;
   }
+  /* Oct 29 (per Mely — phone): tighter header, legend as a neat 2-column list,
+     editor buttons wrap into tidy rows instead of piling up. Desktop untouched. */
+  .map-header { padding: 16px 16px 14px !important; gap: 12px; }
+  .map-title { font-size: 19px !important; }
+  .map-subtitle { font-size: 10.5px !important; }
+  .map-legend { gap: 8px 12px; }
+  .map-legend-item { gap: 6px; min-width: 0; }
+  .map-legend-item > div { width: 11px !important; height: 11px !important; border-radius: 3px !important; }
+  .map-legend-item span { font-size: 12px !important; overflow: hidden; text-overflow: ellipsis; }
+  .map-hint { padding: 12px 14px 0 !important; }
+  .map-hint p { font-size: 12.5px !important; font-weight: 500 !important; line-height: 1.45; }
+  .map-outer { padding: 10px !important; }
+  .map-edit-toolbar { display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 6px !important; padding: 10px 10px 0 !important; }
+  .map-edit-toolbar > button { padding: 8px 4px !important; font-size: 12px !important; white-space: nowrap; }
+  .map-edit-toolbar > div { grid-column: 1 / -1; justify-self: center; margin-left: 0 !important; }
+  .map-mode-row { flex-wrap: wrap; justify-content: center !important; padding: 0 10px; }
+  .map-mode-row > button { flex: 1 1 150px; padding: 9px 10px !important; font-size: 12.5px !important; }
 }
+.map-zoom-ctl {
+  position: absolute; top: 8px; right: 8px; z-index: 300;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: #fff; border: 1px solid rgba(0,0,0,0.12); border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+.map-zoom-ctl button {
+  width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  background: #fff; color: #14532d; border: 0; padding: 0; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.map-zoom-ctl button + button { border-top: 1px solid #e5e7eb; }
+.map-zoom-ctl button:disabled { color: #c4c9cf; cursor: default; }
+.map-zoom-ctl button:active:not(:disabled) { background: #f0fdf4; }
 `;
 
 export default function AlohaMap() {
@@ -1354,6 +1385,15 @@ export default function AlohaMap() {
     // the more you're zoomed in past minScale (the "see everything"
     // level), the further you're allowed to pan. At minScale itself, no
     // panning is needed since the whole map is already visible.
+    // Oct 29 (per Mely — phone view): on narrow screens the map is zoomed with the
+    // on-map +/- buttons, so pan limits follow the real zoomed size — you can reach every
+    // edge of the map but never drag it out of view. Desktop keeps the original limits.
+    if (isNarrowMap && viewportRef.current && containerRef.current) {
+      const vw = viewportRef.current.clientWidth, vh = viewportRef.current.clientHeight;
+      const cw = containerRef.current.offsetWidth, ch = containerRef.current.offsetHeight;
+      const mx = Math.max(0, (cw * scaleValue - vw) / 2), my = Math.max(0, (ch * scaleValue - vh) / 2);
+      return { x: Math.max(-mx, Math.min(mx, pan.x)), y: Math.max(-my, Math.min(my, pan.y)) };
+    }
     const maxOffset = Math.max(0, scaleValue - minScale) * 400;
     return {
       x: Math.max(-maxOffset, Math.min(maxOffset, pan.x)),
@@ -1493,6 +1533,17 @@ export default function AlohaMap() {
   const isRestrictedEditor = editorRole === "park_admin";
   const isInfoOnly = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "info";
   const [editMode, setEditMode] = useState(false);
+  // Oct 29 (per Mely — Android phone): narrow map = phone layout. Lot labels are sized to
+  // fit inside each lot (turned sideways in tall, thin lots) so they never run into each
+  // other, and small +/- buttons on the map zoom in to read them. Desktop is unchanged.
+  const isNarrowMap = !editMode && (scale.w || 900) < 640;
+  function zoomMapTo(target) {
+    hasInteractedRef.current = true;
+    const next = Math.max(minScale, Math.min(MAX_MAP_SCALE, Math.round(target * 100) / 100));
+    const ratio = next / (mapScale || 1);
+    setMapScale(next);
+    setMapPan(next <= minScale ? { x: 0, y: 0 } : clampPan({ x: mapPan.x * ratio, y: mapPan.y * ratio }, next));
+  }
 
   // Aug 12 (per Mely, Phase 2 of the pan/zoom work): react-rnd (the
   // library powering lot move/resize/rotate in edit mode) doesn't
@@ -1578,7 +1629,9 @@ export default function AlohaMap() {
       const contentWidth = containerRef.current?.offsetWidth;
       if (!contentWidth) return;
       const mapHeight = contentWidth * MAP_ASPECT_RATIO;
-      const total = Math.ceil(aboveHeight + mapHeight + 24); // +24: small buffer for border/padding
+      // Oct 29: +40 = the map box's padding (16 top + 16 bottom) and border — the old +24
+      // cut the bottom edge of the map off by a few pixels inside the website's frame.
+      const total = Math.ceil(aboveHeight + mapHeight + 40);
       window.parent.postMessage({ type: "aloha-map-height", height: total }, "*");
     }
 
@@ -1766,6 +1819,23 @@ export default function AlohaMap() {
 
   const isFixedFrame = window.self !== window.top && !editMode;
 
+  // Oct 29: phone-only lot label. Drawn at 10px and shrunk with a transform (not a smaller
+  // font-size) so Android's text boosting / minimum font size can't blow it back up past
+  // the lot's edges. Tall, thin lots get the label turned sideways, which lets it be larger.
+  const narrowLotLabel = (lot, pw, ph) => {
+    const textW = lot.length * 6.4 + 1;
+    const textH = 10;
+    const kFlat = Math.min(1, (pw - 3) / textW, (ph - 3) / textH);
+    const kSide = Math.min(1, (ph - 3) / textW, (pw - 3) / textH);
+    const side = kSide > kFlat * 1.2;
+    const k = Math.max(0.3, side ? kSide : kFlat);
+    return (
+      <span style={{ fontSize:10, fontWeight:700, color:"#fff", textShadow:"0 1px 2px rgba(0,0,0,0.85)", lineHeight:1, whiteSpace:"nowrap", letterSpacing:"-0.02em", fontFamily:"Arial,Helvetica,sans-serif", pointerEvents:"none", display:"inline-block", transform:`${side ? "rotate(-90deg) " : ""}scale(${k})`, transformOrigin:"center" }}>
+        {lot}
+      </span>
+    );
+  };
+
   return (
     <div style={{
       minHeight: !isFixedFrame ? "100vh" : undefined,
@@ -1790,8 +1860,8 @@ export default function AlohaMap() {
       {/* Header */}
       <div className="map-header" style={{ background:"linear-gradient(135deg,#14532d,#16a34a)", padding:"24px" }}>
         <div>
-          <div style={{ fontFamily:"Georgia,serif", fontWeight:900, fontSize:22, color:"#fff" }}>🌺 {companyProfile.company_name}</div>
-          <div style={{ fontSize:12, color:"rgba(255,255,255,0.8)", letterSpacing:1, marginTop:4 }}>INTERACTIVE LOT MAP · KISSIMMEE, FL</div>
+          <div className="map-title" style={{ fontFamily:"Georgia,serif", fontWeight:900, fontSize:22, color:"#fff" }}>🌺 {companyProfile.company_name}</div>
+          <div className="map-subtitle" style={{ fontSize:12, color:"rgba(255,255,255,0.8)", letterSpacing:1, marginTop:4 }}>INTERACTIVE LOT MAP · KISSIMMEE, FL</div>
         </div>
         <div className="map-legend">
           {Object.entries(STATUS_COLORS).map(([s,c]) => (
@@ -1803,7 +1873,7 @@ export default function AlohaMap() {
         </div>
       </div>
 
-      <div style={{ padding:"16px 16px 0", textAlign:"center" }}>
+      <div className="map-hint" style={{ padding:"16px 16px 0", textAlign:"center" }}>
         <p style={{ color:"#166534", fontWeight:600, margin:0, fontSize:14 }}>
           Click any <span style={{ color:"#16a34a" }}>🟢 green</span> or <span style={{ color:"#ca8a04" }}>🟡 orange</span> lot to check availability and reserve it. Hover to see the lot number.
         </p>
@@ -1811,7 +1881,7 @@ export default function AlohaMap() {
       </div>
 
       {canEditMap && editMode && (
-        <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", alignItems:"center", gap:8, padding:"12px 16px 0" }}>
+        <div className="map-edit-toolbar" style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", alignItems:"center", gap:8, padding:"12px 16px 0" }}>
           <button
             onClick={() => setPreviewWidth(null)}
             style={{ background: previewWidth === null ? "#166534" : "#e5e7eb", color: previewWidth === null ? "#fff" : "#374151", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}
@@ -1845,7 +1915,7 @@ export default function AlohaMap() {
       )}
 
       {/* Map Container */}
-      <div style={{
+      <div className="map-outer" style={{
         padding:16, display:"flex", justifyContent:"center", zoom: zoomLevel,
         flex: isFixedFrame ? 1 : undefined,
         minHeight: isFixedFrame ? 0 : undefined,
@@ -1853,7 +1923,8 @@ export default function AlohaMap() {
         <div
           ref={viewportRef}
           style={{
-            overflow: isFixedFrame ? "hidden" : "visible",
+            overflow: (isFixedFrame || isNarrowMap) ? "hidden" : "visible",
+            position: isNarrowMap ? "relative" : undefined,
             width: "100%",
             height: isFixedFrame ? "100%" : undefined,
             maxWidth: previewWidth || 900,
@@ -2045,9 +2116,11 @@ export default function AlohaMap() {
                   boxSizing:"border-box",
                 }}
               >
+                {isNarrowMap ? narrowLotLabel(lot, pw, ph) : (
                 <span style={{ fontSize:"clamp(5px,0.85vw,10px)", fontWeight:700, color:"#fff", textShadow:"0 1px 3px rgba(0,0,0,0.8)", lineHeight:1, pointerEvents:"none" }}>
                   {lot}
                 </span>
+                )}
               </div>
             );
           })}
@@ -2254,6 +2327,21 @@ export default function AlohaMap() {
           })}
 
         </div>
+        {isNarrowMap && (
+          <div className="map-zoom-ctl" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
+            <button type="button" aria-label="Zoom in" onClick={() => zoomMapTo(mapScale * 1.5)} disabled={mapScale >= MAX_MAP_SCALE}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            </button>
+            <button type="button" aria-label="Zoom out" onClick={() => zoomMapTo(mapScale / 1.5)} disabled={mapScale <= minScale}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M5 12h14" /></svg>
+            </button>
+            {mapScale > minScale && (
+              <button type="button" aria-label="Show whole map" onClick={() => zoomMapTo(minScale)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+              </button>
+            )}
+          </div>
+        )}
         </div>
       </div>
 
@@ -2297,7 +2385,7 @@ export default function AlohaMap() {
       )}
 
             {/* Edit/Preview Toggle */}
-      <div style={{ maxWidth:900, margin:"0 auto 10px", display:"flex", justifyContent:"flex-end", gap:8 }}>
+      <div className="map-mode-row" style={{ maxWidth:900, margin:"0 auto 10px", display:"flex", justifyContent:"flex-end", gap:8 }}>
         {canEditMap && editMode && (
           <button
             onClick={() => setShowParkSettings(true)}
