@@ -1822,13 +1822,25 @@ export default function AlohaMap() {
   // Oct 29: phone-only lot label. Drawn at 10px and shrunk with a transform (not a smaller
   // font-size) so Android's text boosting / minimum font size can't blow it back up past
   // the lot's edges. Tall, thin lots get the label turned sideways, which lets it be larger.
-  const narrowLotLabel = (lot, pw, ph) => {
+  // Oct 29 (per Mely): the sideways labels use the SAME letter size as the other lots (B, C, D…),
+  // not bigger — so sideways labels are capped at the typical size of the horizontal labels.
+  const labelFit = (lot, pw, ph) => {
     const textW = lot.length * 6.4 + 1;
     const textH = 10;
     const kFlat = Math.min(1, (pw - 3) / textW, (ph - 3) / textH);
     const kSide = Math.min(1, (ph - 3) / textW, (pw - 3) / textH);
-    const side = kSide > kFlat * 1.2;
-    const k = Math.max(0.3, side ? kSide : kFlat);
+    return { kFlat, kSide, side: kSide > kFlat * 1.2 };
+  };
+  const flatLabelK = (() => {
+    const mapW = scale.w || 900, mapH = scale.h || (900 * MAP_ASPECT_RATIO);
+    const ks = Object.entries(draftLots || {})
+      .map(([lot, [, , w, h]]) => labelFit(lot, w / 100 * mapW, h / 100 * mapH))
+      .filter((f) => !f.side).map((f) => f.kFlat).sort((a, b) => a - b);
+    return ks.length ? ks[Math.floor(ks.length / 2)] : 1;
+  })();
+  const narrowLotLabel = (lot, pw, ph) => {
+    const { kFlat, kSide, side } = labelFit(lot, pw, ph);
+    const k = Math.max(0.3, side ? Math.min(kSide, flatLabelK) : kFlat);
     return (
       <span style={{ fontSize:10, fontWeight:700, color:"#fff", textShadow:"0 1px 2px rgba(0,0,0,0.85)", lineHeight:1, whiteSpace:"nowrap", letterSpacing:"-0.02em", fontFamily:"Arial,Helvetica,sans-serif", pointerEvents:"none", display:"inline-block", transform:`${side ? "rotate(-90deg) " : ""}scale(${k})`, transformOrigin:"center" }}>
         {lot}
