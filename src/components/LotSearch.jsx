@@ -26,10 +26,12 @@ const nice = (s) => new Date(s + "T00:00:00").toLocaleDateString("en-US", { mont
 // horizontal bar (Arrival | Departure | RV length | Slide-outs | Search). Phone: a compact card
 // of neat field boxes. Neutral borders, small grey labels, dark green only as the accent.
 // Styling only — fields, values and behavior are the same as before.
+// Oct 29 later (per Mely — "menos es más", match the page): the website's own fonts (DM Sans,
+// Playfair Display title), no field icons, quieter borders and helper note.
 const css = `
-.ls-wrap{background:#fff;padding:20px 16px 22px;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.ls-wrap{background:#fff;padding:20px 16px 22px;box-sizing:border-box;font-family:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .ls-form{max-width:900px;margin:0 auto}
-.ls-title{font-size:17px;font-weight:650;color:#111827;letter-spacing:-.01em;margin:0 0 10px}
+.ls-title{font-family:"Playfair Display",Georgia,serif;font-size:24px;font-weight:700;color:#0a0a0a;letter-spacing:-.005em;margin:0 0 12px;text-align:center}
 .ls-bar{display:flex;align-items:stretch;background:#fff;border:1px solid #d1d5db;border-radius:12px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 6px 20px rgba(16,24,40,.06)}
 .ls-seg{position:relative;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:9px 14px;min-width:0;border-right:1px solid #e5e7eb;cursor:text;transition:background .15s}
 .ls-seg:first-child{border-radius:11px 0 0 11px}
@@ -38,7 +40,7 @@ const css = `
 .ls-date{flex:1.1 1 0}
 .ls-len{flex:.8 1 0}
 .ls-slide{flex:2 1 0}
-.ls-lbl{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:#6b7280;line-height:1.2;white-space:nowrap}
+.ls-lbl{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;line-height:1.2;white-space:nowrap}
 .ls-lbl svg{flex:0 0 auto;color:#9ca3af}
 .ls-in{width:100%;box-sizing:border-box;border:0;outline:0;background:transparent;padding:0;margin:0;font:inherit;font-size:15px;font-weight:500;color:#111827;height:24px;min-width:0;-webkit-appearance:none;appearance:none}
 .ls-in::placeholder{color:#9ca3af;font-weight:400}
@@ -51,11 +53,11 @@ select.ls-in{cursor:pointer;padding-right:18px;background:url("data:image/svg+xm
 .ls-pair select.ls-in{min-width:58px}
 .ls-sub{font-size:12px;color:#6b7280;white-space:nowrap}
 .ls-btn-cell{display:flex;align-items:center;padding:6px}
-.ls-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:100%;min-height:46px;padding:0 24px;border:0;border-radius:9px;background:#14532d;color:#fff;font:inherit;font-size:15px;font-weight:600;letter-spacing:.01em;cursor:pointer;white-space:nowrap;transition:background .15s,box-shadow .15s}
+.ls-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:100%;min-height:46px;padding:0 26px;border:0;border-radius:8px;background:#14532d;color:#fff;font:inherit;font-size:15px;font-weight:600;letter-spacing:.01em;cursor:pointer;white-space:nowrap;transition:background .15s,box-shadow .15s}
 .ls-btn:hover{background:#0f3f22}
 .ls-btn:focus-visible{outline:2px solid #14532d;outline-offset:2px}
 .ls-btn[disabled]{opacity:.7;cursor:default}
-.ls-note{margin:8px 2px 0;font-size:12px;color:#6b7280;line-height:1.45}
+.ls-note{margin:8px 2px 0;font-size:12px;color:#9ca3af;line-height:1.45;text-align:center}
 .ls-err{margin:8px 2px 0;font-size:13px;font-weight:500;color:#b91c1c}
 .ls-res{max-width:900px;margin:14px auto 0}
 .ls-res-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
@@ -67,19 +69,19 @@ select.ls-in{cursor:pointer;padding-right:18px;background:url("data:image/svg+xm
 .ls-card:hover{border-color:#14532d;box-shadow:0 4px 14px rgba(16,24,40,.08)}
 @media (max-width:720px){
   .ls-wrap{padding:14px 12px 16px}
-  .ls-title{font-size:16px;margin-bottom:10px}
+  .ls-title{font-size:21px;margin-bottom:12px}
   .ls-bar{display:grid;grid-template-columns:1fr 1fr;gap:8px;border:0;box-shadow:none;background:transparent;border-radius:0}
-  .ls-seg,.ls-seg:first-child{border:1px solid #d1d5db;border-radius:10px;padding:8px 12px;background:#fff}
+  .ls-seg,.ls-seg:first-child{border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;background:#fff}
   .ls-seg:focus-within{border-color:#14532d;box-shadow:0 0 0 1px #14532d;background:#fff}
   .ls-len{grid-column:1 / -1}
   .ls-slide{grid-column:1 / -1}
-  .ls-in{font-size:16px}
+  .ls-in{font-size:15px}
   .ls-pair{gap:0;margin-top:2px}
   .ls-pair label{flex-direction:column;align-items:stretch;gap:1px;padding-right:12px}
   .ls-pair label + label{padding:0 0 0 12px;border-left:1px solid #e5e7eb}
-  .ls-sub{font-size:11.5px;color:#9ca3af}
+  .ls-sub{font-size:11px;color:#9ca3af}
   .ls-btn-cell{grid-column:1 / -1;padding:0}
-  .ls-btn{width:100%;min-height:48px;border-radius:10px}
+  .ls-btn{width:100%;min-height:48px;border-radius:8px}
 }
 `;
 const Ico = ({ d }) => (
@@ -133,20 +135,20 @@ export default function LotSearch({ parkId, onResults, onPick, search }) {
         <div className="ls-title">Find an open lot for your dates</div>
         <div className="ls-bar">
           <label className="ls-seg ls-date">
-            <span className="ls-lbl"><Ico d={CAL} />Arrival</span>
+            <span className="ls-lbl">Arrival</span>
             <input type="date" className="ls-in" min={localToday()} value={arrival}
               onChange={(e) => { setArrival(e.target.value); if (departure && departure <= e.target.value) setDeparture(addDays(e.target.value, 1)); }} />
           </label>
           <label className="ls-seg ls-date">
-            <span className="ls-lbl"><Ico d={CAL} />Departure</span>
+            <span className="ls-lbl">Departure</span>
             <input type="date" className="ls-in" min={arrival ? addDays(arrival, 1) : addDays(localToday(), 1)} value={departure} onChange={(e) => setDeparture(e.target.value)} />
           </label>
           <label className="ls-seg ls-len">
-            <span className="ls-lbl"><Ico d={RULER} />RV length (ft)</span>
+            <span className="ls-lbl">RV length (ft)</span>
             <input type="number" inputMode="numeric" min="0" max="80" placeholder="e.g. 35" className="ls-in" value={rvLength} onChange={(e) => setRvLength(e.target.value)} />
           </label>
           <div className="ls-seg ls-slide">
-            <span className="ls-lbl"><Ico d={RV} />Slide-outs</span>
+            <span className="ls-lbl">Slide-outs</span>
             <div className="ls-pair">
               <label>
                 <span className="ls-sub">Driver side</span>
