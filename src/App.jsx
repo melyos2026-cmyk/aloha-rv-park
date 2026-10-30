@@ -2756,6 +2756,20 @@ export default function AlohaMap() {
           </div>
           )}
 
+          {/* Oct 30 (per Mely): it wasn't clear that a lot's details open by tapping the lot. */}
+          {canEditMap && !activeEditLot && (
+            <div className="ed-section" style={{ display:"flex", gap:12, alignItems:"flex-start", background:"#f0fdf4", borderColor:"#bbf7d0" }}>
+              <span aria-hidden style={{ fontSize:18, lineHeight:"22px" }}>👆</span>
+              <div>
+                <div style={{ fontWeight:700, color:"#14532d", fontSize:14 }}>Tap any lot on the map to edit it</div>
+                <div style={{ color:"#4b5563", fontSize:13, marginTop:2, lineHeight:1.5 }}>
+                  Its menu opens below: status, color, shape, size, power, slide-outs, description and photo. Drag a lot to move it,
+                  or drag its corner to resize it. To fill many lots at once, use <b>Edit all lot details</b> at the top of Map Builder.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Add Emojis */}
           <div className="ed-section">
             <div className="ed-section-head">
@@ -2986,7 +3000,7 @@ export default function AlohaMap() {
                   <div className="ed-grid">
                     <div>
                       <label className="ed-label">Max RV length (ft)</label>
-                      <input type="number" className="ed-input" key={activeEditLot + "-max_length_ft"} defaultValue={lotInfo[activeEditLot]?.max_length_ft || lotInfo[activeEditLot]?.max_length || 45}
+                      <input type="number" className="ed-input" key={activeEditLot + "-max_length_ft"} defaultValue={lotInfo[activeEditLot]?.max_length_ft || lotInfo[activeEditLot]?.max_length || ""} placeholder="e.g. 40"
                         onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_length_ft:parseInt(e.target.value)}}))} />
                     </div>
                     <div>
@@ -3005,8 +3019,9 @@ export default function AlohaMap() {
                     </div>
                     <div>
                       <label className="ed-label">Amperage</label>
-                      <select className="ed-input" key={activeEditLot + "-amp_service"} defaultValue={lotInfo[activeEditLot]?.amp_service || String(lotInfo[activeEditLot]?.amperage || 50)}
+                      <select className="ed-input" key={activeEditLot + "-amp_service"} defaultValue={lotInfo[activeEditLot]?.amp_service || (lotInfo[activeEditLot]?.amperage ? String(lotInfo[activeEditLot].amperage) : "")}
                         onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], amp_service:e.target.value}}))}>
+                        <option value="">Not set</option>
                         <option value="30">30 Amp</option>
                         <option value="50">50 Amp</option>
                         <option value="30/50">30/50 Amp</option>

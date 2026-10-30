@@ -60,15 +60,11 @@ export default async function handler(req, res) {
     if (lowSeasonPrice !== undefined) updatePayload.low_season_price = num(lowSeasonPrice);
     if (dailyRate !== undefined) updatePayload.daily_rate = num(dailyRate);
     if (weeklyRate !== undefined) updatePayload.weekly_rate = num(weeklyRate);
-    Object.assign(updatePayload, {
-      max_length_ft: maxLengthFt === '' || maxLengthFt == null ? null : Number(maxLengthFt),
-      // Aug 20 (per Mely — "no veo width no lo veo ahi?"): max_width_ft
-      // was already read/validated on the apply form and shown to
-      // guests, but no editor anywhere ever wrote a real value for it —
-      // this table column existed with no way to actually set it.
-      max_width_ft: maxWidthFt === '' || maxWidthFt == null ? null : Number(maxWidthFt),
-      amp_service: ampService === '' || ampService == null ? null : String(ampService),
-    });
+    // Oct 30: size and power are only written when sent, so a save never blanks what
+    // "Edit all lot details" filled in.
+    if (maxLengthFt !== undefined) updatePayload.max_length_ft = num(maxLengthFt);
+    if (maxWidthFt !== undefined) updatePayload.max_width_ft = num(maxWidthFt);
+    if (ampService !== undefined) updatePayload.amp_service = ampService === '' || ampService == null ? null : String(ampService);
     // Aug 8 (per Mely): not every RV fits every lot — some lots can't
     // physically accommodate slide-outs on one particular side, or too
     // many of them. Independent max per side (not a single combined
@@ -91,6 +87,8 @@ export default async function handler(req, res) {
     if (description !== undefined) {
       updatePayload.description = description;
     }
+
+    if (Object.keys(updatePayload).length === 0) return res.status(200).json({ success: true });
 
     const { error } = await supabase
       .from('rv_lots')
