@@ -43,10 +43,14 @@ export default async function handler(req, res) {
     }
 
     const parts = decoded.split('.');
-    if (parts.length !== 4) return res.status(200).json({ valid: false });
-    const [tokenCompanyId, role, expiresStr, signature] = parts;
+    // Oct 30: `${companyId}.${role}.${expires}.ro.${signature}` = "View as park admin" (read only):
+    // the editor shows, but every save endpoint refuses this token (_editTokenAuth.js).
+    const readOnly = parts.length === 5 && parts[3] === 'ro';
+    if (parts.length !== 4 && !readOnly) return res.status(200).json({ valid: false });
+    const [tokenCompanyId, role, expiresStr] = parts;
+    const signature = parts[parts.length - 1];
 
-    const payload = `${tokenCompanyId}.${role}.${expiresStr}`;
+    const payload = readOnly ? `${tokenCompanyId}.${role}.${expiresStr}.ro` : `${tokenCompanyId}.${role}.${expiresStr}`;
     const expectedSignature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
 
     const validSignature =
@@ -57,7 +61,7 @@ export default async function handler(req, res) {
     if (Date.now() > Number(expiresStr)) return res.status(200).json({ valid: false });
     if (tokenCompanyId !== company.id) return res.status(200).json({ valid: false });
 
-    return res.status(200).json({ valid: true, role: role === 'master_admin' ? 'master_admin' : 'park_admin' });
+    return res.status(200).json({ valid: true, role: role === 'master_admin' ? 'master_admin' : 'park_admin', ...(readOnly ? { readOnly: true } : {}) });
   } catch (err) {
     console.error('Error verifying map edit token:', err);
     return res.status(200).json({ valid: false });

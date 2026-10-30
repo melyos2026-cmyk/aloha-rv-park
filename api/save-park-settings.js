@@ -32,6 +32,10 @@ export default async function handler(req, res) {
     }
 
     const auth = await checkEditToken(token, parkId, supabase);
+
+    // Oct 30: a "View as park admin" (read-only) token never saves anything.
+
+    if (auth.readOnly) return res.status(403).json({ error: 'Read-only view — nothing can be saved while viewing as the park admin.', viewAs: true });
     if (!auth.valid) {
       return res.status(403).json({ error: 'Not authorized to edit this map.' });
     }

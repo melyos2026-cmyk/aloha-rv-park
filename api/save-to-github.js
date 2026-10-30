@@ -25,6 +25,8 @@ export default async function handler(req, res) {
   // sessions — see generate-map-edit-token/route.ts). Nothing in this
   // repo's frontend calls this endpoint, so no working feature changes.
   const auth = await checkEditToken(token, parkId || 'aloha', supabase, 'master_admin');
+  // Oct 30: a "View as park admin" (read-only) token never saves anything.
+  if (auth.readOnly) return res.status(403).json({ error: 'Read-only view — nothing can be saved while viewing as the park admin.', viewAs: true });
   if (!auth.valid) {
     return res.status(403).json({ error: 'Not authorized to edit this map.' });
   }

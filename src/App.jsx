@@ -98,6 +98,39 @@ async function saveToSupabase(type, key, data, token) {
   return res.ok;
 }
 
+// Oct 30 (per Mely — "View as park admin", read only): when the admin opens the editor with a
+// read-only token, every write this page would send is stopped here, in the browser, and a short
+// "Read-only view" note is shown. The server refuses those tokens too (api/_editTokenAuth.js).
+let mapReadOnlyInstalled = false;
+function installMapReadOnlyGuard() {
+  if (mapReadOnlyInstalled || typeof window === 'undefined') return;
+  mapReadOnlyInstalled = true;
+  const original = window.fetch.bind(window);
+  let lastNote = 0;
+  const note = () => {
+    if (Date.now() - lastNote < 2500) return;
+    lastNote = Date.now();
+    try {
+      const el = document.createElement('div');
+      el.setAttribute('role', 'status');
+      el.textContent = 'Read-only view — changes are not saved.';
+      el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;background:#1c1917;color:#fafaf9;font:600 13px/1.3 system-ui,sans-serif;padding:10px 16px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 3200);
+    } catch { /* ignore */ }
+  };
+  window.fetch = function (input, init) {
+    try {
+      const method = String((init && init.method) || (input && typeof input === 'object' && input.method) || 'GET').toUpperCase();
+      if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+        note();
+        return Promise.resolve(new Response(JSON.stringify({ error: 'Read-only view', viewAs: true }), { status: 403, headers: { 'Content-Type': 'application/json' } }));
+      }
+    } catch { /* fall through */ }
+    return original(input, init);
+  };
+}
+
 async function saveLotInfo(parkId, lotKey, info, token) {
   const res = await fetch('/api/save-lot-info', {
     method: 'POST',
@@ -1675,6 +1708,8 @@ export default function AlohaMap() {
   // anyone with no login at all; they now all verify this same token
   // server-side too.
   const [editToken, setEditToken] = useState(null);
+  // Oct 30: "View as park admin" — the editor shows exactly as the park admin sees it, nothing saves.
+  const [mapReadOnly, setMapReadOnly] = useState(false);
   // master_admin: full editor (move/resize lots, everything below).
   // park_admin: restricted — can only manage emoji (add/edit info/delete)
   // and change a lot's color, never move/resize lots or edit their info/price.
@@ -1723,6 +1758,10 @@ export default function AlohaMap() {
     fetch(`/api/verify-edit-token?park_id=${PARK_ID}&token=${encodeURIComponent(token)}`)
       .then((res) => res.json())
       .then((result) => {
+        if (result.valid && result.readOnly) {
+          installMapReadOnlyGuard();
+          setMapReadOnly(true);
+        }
         setEditorRole(result.valid ? result.role : null);
         setEditToken(result.valid ? token : null);
       })
@@ -2573,6 +2612,11 @@ export default function AlohaMap() {
 
             {/* Edit/Preview Toggle */}
       <div className="map-mode-row ed ed-modebar">
+        {canEditMap && mapReadOnly && (
+          <span title="Viewing as the park admin — changes are not saved" style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"6px 12px", borderRadius:999, background:"#fef3c7", color:"#92400e", fontSize:12, fontWeight:700, border:"1px solid #fcd34d" }}>
+            <EdIcon name="eye" /> Read-only view
+          </span>
+        )}
         {canEditMap && editMode && (
           <button type="button" className="ed-btn ed-btn-secondary" onClick={() => setShowParkSettings(true)}>
             <EdIcon name="gear" /> Park Settings

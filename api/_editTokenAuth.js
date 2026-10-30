@@ -13,7 +13,7 @@ import crypto from 'crypto';
 // route can require a valid, non-expired, correct-company token before
 // doing anything.
 //
-// Returns { valid: true, role } or { valid: false }. Callers should
+// Returns { valid: true, role } or { valid: false } (plus readOnly: true for a view-as token). Callers should
 // reject the request (401/403) when valid is false — never proceed.
 export async function checkEditToken(token, parkId, supabase, requiredRole = null) {
   const secret = process.env.MAP_EDIT_SECRET;
@@ -34,10 +34,15 @@ export async function checkEditToken(token, parkId, supabase, requiredRole = nul
   }
 
   const parts = decoded.split('.');
-  if (parts.length !== 4) return { valid: false };
-  const [tokenCompanyId, role, expiresStr, signature] = parts;
+  // Oct 30 (per Mely — "View as park admin", read only): the admin mints
+  // `${companyId}.${role}.${expires}.ro.${signature}` for a read-only view. It is checked like any
+  // token (signature, expiry, company) but NEVER accepted for a write: { valid: false, readOnly: true }.
+  const readOnly = parts.length === 5 && parts[3] === 'ro';
+  if (parts.length !== 4 && !readOnly) return { valid: false };
+  const [tokenCompanyId, role, expiresStr] = parts;
+  const signature = parts[parts.length - 1];
 
-  const payload = `${tokenCompanyId}.${role}.${expiresStr}`;
+  const payload = readOnly ? `${tokenCompanyId}.${role}.${expiresStr}.ro` : `${tokenCompanyId}.${role}.${expiresStr}`;
   const expectedSignature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
 
   const validSignature =
@@ -47,6 +52,8 @@ export async function checkEditToken(token, parkId, supabase, requiredRole = nul
   if (!validSignature) return { valid: false };
   if (Date.now() > Number(expiresStr)) return { valid: false };
   if (tokenCompanyId !== company.id) return { valid: false };
+
+  if (readOnly) return { valid: false, readOnly: true };
 
   const resolvedRole = role === 'master_admin' ? 'master_admin' : 'park_admin';
   if (requiredRole === 'master_admin' && resolvedRole !== 'master_admin') return { valid: false };
