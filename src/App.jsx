@@ -137,11 +137,7 @@ async function saveActiveLotInfo(activeEditLot, lotInfo, token) {
       body: JSON.stringify({
         parkId: PARK_ID,
         lotName: activeEditLot,
-        basePrice: info.base_price,
-        highSeasonPrice: info.high_season_price,
-        lowSeasonPrice: info.low_season_price,
-        dailyRate: info.price_daily,
-        weeklyRate: info.price_weekly,
+        // Oct 30: prices are no longer sent from the map editor (Lots & Seasonal Pricing owns them).
         maxLengthFt: info.max_length_ft,
         maxWidthFt: info.max_width_ft,
         ampService: info.amp_service,
@@ -2996,34 +2992,29 @@ export default function AlohaMap() {
                         <option value="4+">4+</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="ed-label">Daily price ($)</label>
-                      <input type="number" className="ed-input" key={activeEditLot + "-price_daily"} defaultValue={lotInfo[activeEditLot]?.price_daily || 45}
-                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_daily:parseFloat(e.target.value)}}))} />
-                    </div>
-                    <div>
-                      <label className="ed-label">Base price ($)</label>
-                      <input type="number" className="ed-input" key={activeEditLot + "-base_price"} defaultValue={lotInfo[activeEditLot]?.base_price || ""}
-                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], base_price:parseFloat(e.target.value)}}))}
-                        placeholder="year-round flat rate" />
-                    </div>
-                    <div>
-                      <label className="ed-label">High season ($/mo)</label>
-                      <input type="number" className="ed-input" key={activeEditLot + "-high_season_price"} defaultValue={lotInfo[activeEditLot]?.high_season_price || ""}
-                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], high_season_price:parseFloat(e.target.value)}}))}
-                        placeholder="optional" />
-                    </div>
-                    <div>
-                      <label className="ed-label">Low season ($/mo)</label>
-                      <input type="number" className="ed-input" key={activeEditLot + "-low_season_price"} defaultValue={lotInfo[activeEditLot]?.low_season_price || ""}
-                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], low_season_price:parseFloat(e.target.value)}}))}
-                        placeholder="optional" />
-                    </div>
-                    <div>
-                      <label className="ed-label">Weekly price ($)</label>
-                      <input type="number" className="ed-input" key={activeEditLot + "-price_weekly"} defaultValue={lotInfo[activeEditLot]?.price_weekly || ""}
-                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_weekly:parseFloat(e.target.value)}}))}
-                        placeholder="optional" />
+                    {/* Oct 30 (per Mely): prices are changed only in the admin's Lots & Seasonal Pricing
+                        (sections, ranges, seasons). Here they're shown read-only, so there is one place to edit them. */}
+                    <div className="ed-span">
+                      <label className="ed-label">Prices</label>
+                      <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", justifyContent:"space-between", gap:8, padding:"10px 12px", border:"1px solid #e5e7eb", borderRadius:8, background:"#f9fafb" }}>
+                        <span style={{ fontSize:14, color:"#111827" }}>
+                          {(() => {
+                            const li = lotInfo[activeEditLot] || {};
+                            const m = (v) => (Number(v) > 0 ? "$" + Number(v).toLocaleString("en-US") : null);
+                            const parts = [
+                              m(li.price_daily) && m(li.price_daily) + "/night",
+                              m(li.price_weekly) && m(li.price_weekly) + "/week",
+                              m(li.base_price) && m(li.base_price) + "/mo",
+                              (m(li.high_season_price) || m(li.low_season_price)) && "Seasonal " + [m(li.high_season_price), m(li.low_season_price)].filter(Boolean).join(" / ") + " /mo",
+                            ].filter(Boolean);
+                            return parts.length ? parts.join(" · ") : "No price set yet";
+                          })()}
+                        </span>
+                        <button type="button" className="ed-btn"
+                          onClick={() => { try { window.parent.postMessage({ type: "melyos-open-module", module: "lots_pricing" }, "*"); } catch {} }}>
+                          Change prices in Lots &amp; Seasonal Pricing →
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label className="ed-label">Yearly price ($)</label>

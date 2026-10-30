@@ -47,12 +47,16 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Park not found' });
     }
 
-    const updatePayload = {
-      base_price: basePrice === '' || basePrice == null ? null : Number(basePrice),
-      high_season_price: highSeasonPrice === '' || highSeasonPrice == null ? null : Number(highSeasonPrice),
-      low_season_price: lowSeasonPrice === '' || lowSeasonPrice == null ? null : Number(lowSeasonPrice),
-      daily_rate: dailyRate === '' || dailyRate == null ? null : Number(dailyRate),
-      weekly_rate: weeklyRate === '' || weeklyRate == null ? null : Number(weeklyRate),
+    // Oct 30 (per Mely): prices are only written when actually sent — the map editor no longer sends
+    // them (Lots & Seasonal Pricing owns prices), so a lot-details save never wipes a lot's prices.
+    const updatePayload = {};
+    const num = (v) => (v === '' || v == null ? null : Number(v));
+    if (basePrice !== undefined) updatePayload.base_price = num(basePrice);
+    if (highSeasonPrice !== undefined) updatePayload.high_season_price = num(highSeasonPrice);
+    if (lowSeasonPrice !== undefined) updatePayload.low_season_price = num(lowSeasonPrice);
+    if (dailyRate !== undefined) updatePayload.daily_rate = num(dailyRate);
+    if (weeklyRate !== undefined) updatePayload.weekly_rate = num(weeklyRate);
+    Object.assign(updatePayload, {
       max_length_ft: maxLengthFt === '' || maxLengthFt == null ? null : Number(maxLengthFt),
       // Aug 20 (per Mely — "no veo width no lo veo ahi?"): max_width_ft
       // was already read/validated on the apply form and shown to
@@ -60,7 +64,7 @@ export default async function handler(req, res) {
       // this table column existed with no way to actually set it.
       max_width_ft: maxWidthFt === '' || maxWidthFt == null ? null : Number(maxWidthFt),
       amp_service: ampService === '' || ampService == null ? null : String(ampService),
-    };
+    });
     // Aug 8 (per Mely): not every RV fits every lot — some lots can't
     // physically accommodate slide-outs on one particular side, or too
     // many of them. Independent max per side (not a single combined
