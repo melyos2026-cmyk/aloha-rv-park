@@ -1710,6 +1710,16 @@ export default function AlohaMap() {
   const [editToken, setEditToken] = useState(null);
   // Oct 30: "View as park admin" — the editor shows exactly as the park admin sees it, nothing saves.
   const [mapReadOnly, setMapReadOnly] = useState(false);
+  // Oct 30 (per Mely — the browser's "An embedded page says…" pop-up looked unprofessional):
+  // an in-page notice instead of alert(), and it only says "saved" when the save really worked.
+  const [edToast, setEdToast] = useState(null);
+  const edToastTimer = useRef(null);
+  const notify = (msg, tone = "ok") => {
+    setEdToast({ msg, tone });
+    if (edToastTimer.current) clearTimeout(edToastTimer.current);
+    edToastTimer.current = setTimeout(() => setEdToast(null), 3200);
+  };
+  const saveResultMsg = (ok, what) => ok ? `${what} saved` : (mapReadOnly ? "Read-only view — nothing was saved" : `Could not save ${what.toLowerCase()}. Please try again.`);
   // master_admin: full editor (move/resize lots, everything below).
   // park_admin: restricted — can only manage emoji (add/edit info/delete)
   // and change a lot's color, never move/resize lots or edit their info/price.
@@ -2634,6 +2644,19 @@ export default function AlohaMap() {
         )}
       </div>
 
+      {edToast && (
+        <div role="status" aria-live="polite" style={{ position:"fixed", left:"50%", bottom:24, transform:"translateX(-50%)", zIndex:3000,
+          display:"flex", alignItems:"center", gap:10, padding:"12px 18px", borderRadius:10, maxWidth:"min(92vw, 440px)",
+          background: edToast.tone === "err" ? "#fff" : "#14532d", color: edToast.tone === "err" ? "#991b1b" : "#fff",
+          border: edToast.tone === "err" ? "1px solid #fecaca" : "1px solid #14532d", boxShadow:"0 10px 30px rgba(0,0,0,.18)",
+          fontFamily:"'DM Sans', -apple-system, 'Segoe UI', Roboto, Arial, sans-serif", fontSize:14, fontWeight:600 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {edToast.tone === "err" ? <><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></> : <path d="M5 12.5l4.5 4.5L19 7.5" />}
+          </svg>
+          <span>{edToast.msg}</span>
+        </div>
+      )}
+
       {showParkSettings && (
         <div className="ed ed-modal-back">
           <div className="ed-modal" role="dialog" aria-label="Park Settings">
@@ -2660,9 +2683,9 @@ export default function AlohaMap() {
             </div>
             <div className="ed-modal-foot">
               <button type="button" className="ed-btn ed-btn-primary ed-btn-block" onClick={async ()=>{
-                await saveParkSettings(parkSettings, editToken);
-                alert("Park settings saved!");
-                setShowParkSettings(false);
+                const ok = await saveParkSettings(parkSettings, editToken);
+                notify(saveResultMsg(ok, "Park settings"), ok ? "ok" : "err");
+                if (ok) setShowParkSettings(false);
               }}>
                 Save Settings
               </button>
@@ -2698,8 +2721,8 @@ export default function AlohaMap() {
             </div>
           </div>
           <button onClick={async ()=>{
-            await saveToSupabase('emojis', 'all', emojis, editToken);
-            alert("Saved!");
+            const ok = await saveToSupabase('emojis', 'all', emojis, editToken);
+            notify(saveResultMsg(ok, "Stickers"), ok ? "ok" : "err");
           }} style={{ width:"100%", background:"#8b5cf6", color:"#fff", border:"none", padding:"10px", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:700 }}>
             💾 Save Changes
           </button>
@@ -3210,11 +3233,11 @@ export default function AlohaMap() {
           <button type="button" className="ed-btn ed-btn-primary ed-btn-block" style={{ height:40, fontSize:14 }} onClick={async ()=>{
             try {
               await saveActiveLotInfo(activeEditLot, lotInfo, editToken);
-              await saveToSupabase('emojis', 'all', emojis, editToken);
-              await saveToSupabase('lotColors', 'all', lotColors, editToken);
-              alert("Changes saved!");
+              const r1 = await saveToSupabase('emojis', 'all', emojis, editToken);
+              const r2 = await saveToSupabase('lotColors', 'all', lotColors, editToken);
+              notify(saveResultMsg(r1 && r2, "Changes"), r1 && r2 ? "ok" : "err");
             } catch(e) {
-              alert("⚠️ Error: " + e.message);
+              notify(mapReadOnly ? "Read-only view — nothing was saved" : "Could not save: " + e.message, "err");
             }
           }}>
             <EdIcon name="save" /> Save Changes
