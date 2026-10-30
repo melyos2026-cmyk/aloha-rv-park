@@ -128,9 +128,9 @@ async function saveActiveLotInfo(activeEditLot, lotInfo, token) {
       description: info.description || ""
     }, token);
   } else {
-    await saveLotInfo(PARK_ID, activeEditLot, {
-      price_yearly: info.price_yearly || null
-    }, token);
+    // Oct 30 (per Mely): an RV lot's Yearly price is set only in the admin's
+    // Lots & Seasonal Pricing (still stored in lot_info.price_yearly), so the
+    // map editor no longer sends it and can't overwrite it.
     await fetch('/api/set-lot-pricing', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3006,6 +3006,7 @@ export default function AlohaMap() {
                               m(li.price_weekly) && m(li.price_weekly) + "/week",
                               m(li.base_price) && m(li.base_price) + "/mo",
                               (m(li.high_season_price) || m(li.low_season_price)) && "Seasonal " + [m(li.high_season_price), m(li.low_season_price)].filter(Boolean).join(" / ") + " /mo",
+                              m(li.price_yearly) && m(li.price_yearly) + "/yr",
                             ].filter(Boolean);
                             return parts.length ? parts.join(" · ") : "No price set yet";
                           })()}
@@ -3015,12 +3016,6 @@ export default function AlohaMap() {
                           Change prices in Lots &amp; Seasonal Pricing →
                         </button>
                       </div>
-                    </div>
-                    <div>
-                      <label className="ed-label">Yearly price ($)</label>
-                      <input type="number" className="ed-input" key={activeEditLot + "-price_yearly"} defaultValue={lotInfo[activeEditLot]?.price_yearly || ""}
-                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_yearly:parseFloat(e.target.value)}}))}
-                        placeholder="optional" />
                     </div>
                     <div className="ed-span">
                       <label className="ed-label">Description</label>
