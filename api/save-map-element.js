@@ -52,6 +52,12 @@ export default async function handler(req, res) {
     if (!auth.valid) {
       return res.status(403).json({ error: "Not authorized to edit this map." });
     }
+    // Oct 30 (per Mely): only MelyOS (master_admin) can move, resize, rotate or reshape lots or change the
+    // map layout. A park admin may only save what's inside a lot (status color) and the map stickers.
+    const PARK_ADMIN_TYPES = new Set(["lotColors", "emojis"]);
+    if (auth.role !== "master_admin" && !PARK_ADMIN_TYPES.has(type)) {
+      return res.status(403).json({ error: "Only MelyOS can move or resize lots and change the map layout." });
+    }
 
     // Oct 20 (security review): companyId used to be taken straight from
     // the request body, so an editor of park A could stamp park B's

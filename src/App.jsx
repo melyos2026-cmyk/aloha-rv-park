@@ -2763,8 +2763,10 @@ export default function AlohaMap() {
               <div>
                 <div style={{ fontWeight:700, color:"#14532d", fontSize:14 }}>Tap any lot on the map to edit it</div>
                 <div style={{ color:"#4b5563", fontSize:13, marginTop:2, lineHeight:1.5 }}>
-                  Its menu opens below: status, color, shape, size, power, slide-outs, description and photo. Drag a lot to move it,
-                  or drag its corner to resize it. To fill many lots at once, use <b>Edit all lot details</b> at the top of Map Builder.
+                  {isAdmin
+                    ? <>Its menu opens below: status, color, shape, size, power, slide-outs, description and photo. Drag a lot to move it, or drag its corner to resize it. </>
+                    : <>Its menu opens below: status, color, size, power, slide-outs, description and photo. Lot positions and sizes on the map are set by MelyOS. </>}
+                  To fill many lots at once, use <b>Edit all lot details</b> at the top of Map Builder.
                 </div>
               </div>
             </div>
