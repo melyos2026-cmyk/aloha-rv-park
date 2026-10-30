@@ -361,6 +361,12 @@ const STATUS_COLORS = {
   for_rent:    "rgba(139,92,246,0.7)",
 };
 
+// Oct 30 (per Mely): a storage space (S1…) the office marked "Not available", or every non-occupied
+// one while the park's "Offer RV storage" switch is Off (api/lot-data.js?type=statuses →
+// storageNotAvailable). Gray, labeled "Not available", no call-the-office prompt.
+const NOT_AVAILABLE_COLOR = "rgba(107,114,128,0.7)";
+const NOT_AVAILABLE_SOLID = "#4b5563";
+
 const STATUS_SOLID = {
   available:   "#16a34a",
   occupied:    "#dc2626",
@@ -1483,6 +1489,7 @@ select.ed-input { padding-right: 6px; }
 export default function AlohaMap() {
   const [statuses, setStatuses] = useState(() => (MAP_CACHE && MAP_CACHE.statuses) ? { ...initStatuses(), ...MAP_CACHE.statuses } : initStatuses());
   const [bookingDisabled, setBookingDisabled] = useState({});
+  const [storageNotAvailable, setStorageNotAvailable] = useState(() => (MAP_CACHE && MAP_CACHE.storageNotAvailable) || {});
   const [reservedDates, setReservedDates] = useState({});
   const [hover, setHover] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -1917,6 +1924,7 @@ export default function AlohaMap() {
       if (statusData) {
         setStatuses(prev => ({ ...prev, ...(statusData.statuses || {}) }));
         setBookingDisabled(statusData.bookingDisabled || {});
+        setStorageNotAvailable(statusData.storageNotAvailable || {});
       }
       writeMapCache({
         lots: (geoRowsAll[0]?.data && Object.keys(geoRowsAll[0].data).length > 0) ? geoRowsAll[0].data : null,
@@ -1924,6 +1932,7 @@ export default function AlohaMap() {
         lotColors: colorRows[0]?.data || {}, rotations: rotRows[0]?.data || {},
         emojiRotations: emojiRotRows[0]?.data || {}, textRotations: textRotRows[0]?.data || {},
         statuses: (statusData && statusData.statuses) || {},
+        storageNotAvailable: (statusData && statusData.storageNotAvailable) || {},
       });
       // Everything that changes how the lots LOOK is in — show the map now.
       // (Prices, dates and settings below load quietly afterwards.)
@@ -1996,6 +2005,13 @@ export default function AlohaMap() {
   };
 
   const counts = Object.values(statuses).reduce((acc, s) => { acc[s] = (acc[s]||0)+1; return acc; }, {});
+  // Storage spaces shown "Not available" are counted there, not under their stored status.
+  Object.keys(storageNotAvailable).forEach((lot) => {
+    if (!storageNotAvailable[lot] || !(lot in statuses)) return;
+    const st = statuses[lot];
+    if (counts[st]) counts[st] -= 1;
+    counts.not_available = (counts.not_available || 0) + 1;
+  });
 
   if (!PARK_ID_PROVIDED) {
     return (
@@ -2097,6 +2113,12 @@ export default function AlohaMap() {
               <span style={{ color:"#fff", fontSize:13, textTransform:"capitalize", fontWeight:600 }}>{s.replace(/_/g," ")} ({counts[s]||0})</span>
             </div>
           ))}
+          {counts.not_available > 0 && (
+            <div className="map-legend-item">
+              <div style={{ width:14, height:14, borderRadius:4, background:NOT_AVAILABLE_SOLID, flexShrink:0, backgroundImage:"repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0 2px, transparent 2px 5px)" }} />
+              <span style={{ color:"#fff", fontSize:13, fontWeight:600 }}>Storage not available ({counts.not_available})</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -2309,12 +2331,13 @@ export default function AlohaMap() {
                 </div>
               );
             }
+            const storageNA = lot.startsWith("S") && !!storageNotAvailable[lot];
             return (
               <div
                 key={lot}
                 onClick={() => {
                   if (lot.startsWith("S")) {
-                    setSelectedStorageLot({ lot, status });
+                    setSelectedStorageLot({ lot, status, notAvailable: storageNA });
                   } else if (searchFree && searchFree.has(lot)) {
                     setSelected({ lot, status: "available", prefill: searchPrefill });
                   } else {
@@ -2323,14 +2346,16 @@ export default function AlohaMap() {
                 }}
                 onMouseEnter={() => setHover(lot)}
                 onMouseLeave={() => setHover(null)}
-                title={`Lot ${lot} • ${status}`}
+                title={storageNA ? `Storage ${lot} • Not available` : `Lot ${lot} • ${status}`}
                 style={{
                   position:"absolute",
                   left:`${x}%`, top:`${y}%`,
                   width:`${w}%`, height:`${h}%`,
                   background: searchFree
                     ? (searchFree.has(lot) ? (isHov ? "rgba(22,163,74,0.95)" : "rgba(34,197,94,0.85)") : "rgba(107,114,128,0.35)")
+                    : storageNA ? (isHov ? NOT_AVAILABLE_COLOR.replace(/[\d.]+\)$/, "0.88)") : NOT_AVAILABLE_COLOR)
                     : lotColors[lot] ? lotColors[lot] : isHov ? STATUS_COLORS[status].replace(/[\d.]+\)$/, "0.88)") : STATUS_COLORS[status],
+                  backgroundImage: storageNA && !searchFree ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 6px)" : undefined,
                   borderRadius: borderRadius,
                   clipPath: clipPath,
                   cursor: "pointer",
@@ -2343,7 +2368,12 @@ export default function AlohaMap() {
                   boxSizing:"border-box",
                 }}
               >
-                {isNarrowMap ? narrowLotLabel(lot, pw, ph) : (
+                {isNarrowMap ? narrowLotLabel(lot, pw, ph) : storageNA ? (
+                <span style={{ display:"flex", flexDirection:"column", alignItems:"center", color:"#fff", textShadow:"0 1px 3px rgba(0,0,0,0.8)", lineHeight:1.05, pointerEvents:"none", textAlign:"center" }}>
+                  <span style={{ fontSize:"clamp(5px,0.85vw,10px)", fontWeight:700 }}>{lot}</span>
+                  <span style={{ fontSize:"clamp(4px,0.55vw,7px)", fontWeight:700, whiteSpace:"nowrap" }}>Not available</span>
+                </span>
+                ) : (
                 <span style={{ fontSize:"clamp(5px,0.85vw,10px)", fontWeight:700, color:"#fff", textShadow:"0 1px 3px rgba(0,0,0,0.8)", lineHeight:1, pointerEvents:"none" }}>
                   {lot}
                 </span>
@@ -2612,6 +2642,7 @@ export default function AlohaMap() {
         <StorageCheckoutModal
           lotId={selectedStorageLot.lot}
           lotInfo={lotInfo[selectedStorageLot.lot]}
+          notAvailable={!!selectedStorageLot.notAvailable}
           onClose={() => setSelectedStorageLot(null)}
         />
       )}
@@ -2893,7 +2924,7 @@ export default function AlohaMap() {
                   <div className="ed-span">
                     <span className="ed-label">Status / color</span>
                     <div className="ed-seg ed-seg-fill" role="group" aria-label="Lot status">
-                      {ED_STATUS_OPTIONS.map(([s,c,label])=>(
+                      {ED_STATUS_OPTIONS.map(([s,c,label0])=>{ const label = s === "maintenance" && /^S\d+$/i.test(activeEditLot || "") ? "Not available" : label0; return (
                         <button type="button" key={s} aria-pressed={statuses[activeEditLot]===s} onClick={async ()=>{
                           setStatuses(prev=>({...prev,[activeEditLot]:s}));
                           if (s === "for_sale") ensureRealEstateListing(activeEditLot, editToken);
@@ -2915,7 +2946,7 @@ export default function AlohaMap() {
                           <span className="ed-dot" style={{ background:c }} />
                           {label}
                         </button>
-                      ))}
+                      );})}
                     </div>
                   </div>
 

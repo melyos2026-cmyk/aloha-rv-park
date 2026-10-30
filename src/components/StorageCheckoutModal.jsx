@@ -8,7 +8,9 @@ const UNIT_LABELS = { daily: 'day(s)', monthly: 'month(s)', yearly: 'year(s)' };
 // Checking the lot ID directly here means this can never silently fail.
 const PHONE_ONLY_LOTS = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
 
-export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
+// Oct 30 (per Mely): notAvailable = the office marked this space "Not available" or turned the park's
+// "Offer RV storage" switch Off (api/lot-data.js storageNotAvailable). Shows only that — no phone prompt.
+export default function StorageCheckoutModal({ lotId, lotInfo, notAvailable = false, onClose }) {
   const isPhoneOnly = PHONE_ONLY_LOTS.includes(lotId) || !!lotInfo?.phone_only;
   const [billingType, setBillingType] = useState('monthly');
   const [quantity, setQuantity] = useState(1);
@@ -117,7 +119,15 @@ export default function StorageCheckoutModal({ lotId, lotInfo, onClose }) {
             <div style={styles.descBox}>{lotInfo.description}</div>
           )}
 
-          {isPhoneOnly ? (
+          {notAvailable ? (
+            <div style={{ ...styles.detailsBox, background: '#f3f4f6', border: '1px solid #d1d5db' }} data-testid="storage-not-available">
+              <p style={{ margin: 0, fontSize: 13, color: '#374151', lineHeight: 1.6 }}>
+                <strong>Not available</strong>
+                <br />
+                This storage space is not available right now.
+              </p>
+            </div>
+          ) : isPhoneOnly ? (
             <div style={styles.detailsBox}>
               <p style={{ margin: 0, fontSize: 13, color: '#374151', lineHeight: 1.6 }}>
                 Need RV storage?

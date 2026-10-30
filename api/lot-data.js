@@ -167,10 +167,20 @@ async function getStatuses(req, res) {
 
   const { data: lots, error: lotsErr } = await supabase
     .from('rv_lots')
-    .select('lot_name, online_booking_disabled')
+    .select('lot_name, online_booking_disabled, status')
     .eq('company_id', company.id);
 
   if (lotsErr) throw lotsErr;
+
+  // Oct 30 (per Mely): RV storage availability. Only two public facts leave here: the park-wide
+  // "Offer RV storage" switch (lease_defaults.storage_offered, missing = on) and which storage spaces
+  // show "Not available". Nothing else from lease_defaults is sent.
+  const [{ data: settingsRow }, { data: companyType }] = await Promise.all([
+    supabase.from('park_settings').select('lease_defaults').eq('company_id', company.id).maybeSingle(),
+    supabase.from('companies').select('business_type').eq('id', company.id).maybeSingle(),
+  ]);
+  const storageOffered = settingsRow?.lease_defaults?.storage_offered !== false;
+  const isMarina = String(companyType?.business_type || '').toLowerCase() === 'marina';
 
   const { data: liveStatuses, error: liveErr } = await supabase.rpc('get_live_lot_statuses', {
     p_company_id: company.id,
@@ -185,12 +195,20 @@ async function getStatuses(req, res) {
 
   const statuses = {};
   const bookingDisabled = {};
+  const storageNotAvailable = {};
   (lots || []).forEach((l) => {
     statuses[l.lot_name] = liveByLotName[l.lot_name] || 'available';
     bookingDisabled[l.lot_name] = !!l.online_booking_disabled;
+    // Storage space (S1, S2…; not on a marina, whose slips can be named S1): "Not available" when the
+    // office marked it so (status 'maintenance'), or when the park switch is Off and it isn't occupied.
+    if (!isMarina && /^s\d+$/i.test(String(l.lot_name || '').trim())) {
+      const live = statuses[l.lot_name];
+      const occupied = live === 'occupied' || l.status === 'occupied';
+      if (!occupied && (live === 'maintenance' || l.status === 'maintenance' || !storageOffered)) storageNotAvailable[l.lot_name] = true;
+    }
   });
 
-  return res.status(200).json({ statuses, bookingDisabled });
+  return res.status(200).json({ statuses, bookingDisabled, storageOffered, storageNotAvailable });
 }
 
 // Oct 20 (security review): still returns order ids (the My Reservations
