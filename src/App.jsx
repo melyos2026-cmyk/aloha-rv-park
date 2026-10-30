@@ -1217,6 +1217,31 @@ function MyReservationsModal({ parkSettings, onClose }) {
 }
 
 // ═══ Main App ═══
+// Oct 30: small line icons for the map editor (replace the emoji in its buttons).
+const ED_ICON_PATHS = {
+  gear: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z",
+  eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
+  pencil: "M12 20h9 M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z",
+  monitor: "M3 4h18v12H3z M8 20h8 M12 16v4",
+  phone: "M7 2h10v20H7z M11 18h2",
+  auto: "M4 8V4h4 M20 8V4h-4 M4 16v4h4 M20 16v4h-4",
+  plus: "M12 5v14 M5 12h14",
+  minus: "M5 12h14",
+  x: "M18 6 6 18 M6 6l12 12",
+  trash: "M3 6h18 M8 6V4h8v2 M19 6l-1 14H6L5 6 M10 11v6 M14 11v6",
+  save: "M5 3h11l3 3v15H5z M8 3v5h7V3 M8 21v-7h8v7",
+  reset: "M3 12a9 9 0 1 0 3-6.7L3 8 M3 3v5h5",
+};
+function EdIcon({ name, size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={ED_ICON_PATHS[name]} />
+    </svg>
+  );
+}
+const ED_STATUS_OPTIONS = [["available","#16a34a","Available"],["occupied","#dc2626","Occupied"],["reserved","#ca8a04","Reserved"],["maintenance","#4b5563","Maintenance"],["for_sale","#ac67dd","For Sale"],["for_rent","#8b5cf6","For Rent"]];
+const edShapeLabel = (s) => { const t = s.replace(/-/g, " "); return t.charAt(0).toUpperCase() + t.slice(1); };
+
 const emojiHoverStyle = `
 .map-emoji-hover:hover {
   transform: scale(1.25);
@@ -1275,11 +1300,140 @@ const emojiHoverStyle = `
   .map-hint { padding: 12px 14px 0 !important; }
   .map-hint p { font-size: 12.5px !important; font-weight: 500 !important; line-height: 1.45; }
   .map-outer { padding: 10px !important; }
-  .map-edit-toolbar { display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 6px !important; padding: 10px 10px 0 !important; }
-  .map-edit-toolbar > button { padding: 8px 4px !important; font-size: 12px !important; white-space: nowrap; }
-  .map-edit-toolbar > div { grid-column: 1 / -1; justify-self: center; margin-left: 0 !important; }
-  .map-mode-row { flex-wrap: wrap; justify-content: center !important; padding: 0 10px; }
-  .map-mode-row > button { flex: 1 1 150px; padding: 9px 10px !important; font-size: 12.5px !important; }
+  /* editor toolbar / mode buttons: phone layout lives in the .ed-* rules below */
+}
+/* Oct 30 (per Mely — "professional and elegant, not childish"): one quiet admin look
+   for the map editor — white panels, hairline borders, 8px corners, small gray labels,
+   one dark-green primary button. Styling only. */
+.ed {
+  --ed-accent: #14532d; --ed-accent-hover: #166534; --ed-text: #111827; --ed-muted: #6b7280;
+  --ed-border: #e5e7eb; --ed-border-strong: #d1d5db; --ed-subtle: #f9fafb; --ed-track: #f3f4f6;
+  font-family: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ed-text); font-size: 13px; line-height: 1.4;
+}
+.ed *, .ed *::before, .ed *::after { box-sizing: border-box; }
+.ed-panel {
+  max-width: 900px; margin: 0 auto 20px; background: #fff;
+  border: 1px solid var(--ed-border); border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(16,24,40,0.05);
+}
+.ed-section { padding: 16px 20px; }
+.ed-section + .ed-section { border-top: 1px solid var(--ed-border); }
+.ed-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.ed-title { font-size: 14px; font-weight: 600; color: var(--ed-text); margin: 0; }
+.ed-hint { font-size: 12px; color: var(--ed-muted); font-weight: 400; }
+.ed-label { display: block; font-size: 12px; font-weight: 500; color: var(--ed-muted); margin-bottom: 6px; }
+.ed-sublabel { font-size: 11.5px; font-weight: 500; color: var(--ed-muted); margin: 10px 0 6px; }
+.ed-row { display: flex; gap: 8px; align-items: center; }
+.ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+.ed-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 16px; }
+.ed-span { grid-column: 1 / -1; }
+.ed-input {
+  width: 100%; height: 36px; padding: 0 10px; font: inherit; font-size: 13px; color: var(--ed-text);
+  background: #fff; border: 1px solid var(--ed-border-strong); border-radius: 8px; outline: none;
+  transition: border-color .12s, box-shadow .12s;
+}
+textarea.ed-input { height: auto; min-height: 72px; padding: 8px 10px; resize: vertical; line-height: 1.45; }
+select.ed-input { padding-right: 6px; }
+.ed-input:focus { border-color: var(--ed-accent); box-shadow: 0 0 0 3px rgba(20,83,45,0.12); }
+.ed-input::placeholder { color: #9ca3af; }
+.ed-color {
+  width: 36px; height: 36px; padding: 3px; flex-shrink: 0; cursor: pointer;
+  background: #fff; border: 1px solid var(--ed-border-strong); border-radius: 8px;
+}
+.ed-color::-webkit-color-swatch-wrapper { padding: 0; }
+.ed-color::-webkit-color-swatch { border: none; border-radius: 5px; }
+.ed-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 36px; padding: 0 14px; font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap;
+  border-radius: 8px; border: 1px solid transparent; cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s, box-shadow .12s;
+}
+.ed-btn:disabled { opacity: .55; cursor: default; }
+.ed-btn svg { flex-shrink: 0; }
+.ed-btn-primary { background: var(--ed-accent); color: #fff; box-shadow: 0 1px 2px rgba(16,24,40,0.08); }
+.ed-btn-primary:hover { background: var(--ed-accent-hover); }
+.ed-btn-secondary { background: #fff; color: #374151; border-color: var(--ed-border-strong); }
+.ed-btn-secondary:hover { background: var(--ed-subtle); border-color: #9ca3af; }
+.ed-btn-danger { background: #fff; color: #b91c1c; border-color: #fca5a5; }
+.ed-btn-danger:hover { background: #fef2f2; border-color: #f87171; }
+.ed-btn-danger-solid { background: #dc2626; color: #fff; }
+.ed-btn-danger-solid:hover { background: #b91c1c; }
+.ed-btn-ghost { background: transparent; color: var(--ed-muted); }
+.ed-btn-ghost:hover { background: var(--ed-track); color: var(--ed-text); }
+.ed-btn-sm { height: 30px; padding: 0 10px; font-size: 12px; }
+.ed-btn-icon { width: 32px; height: 32px; padding: 0; }
+.ed-btn-block { width: 100%; }
+.ed-seg {
+  display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px;
+  background: var(--ed-track); border: 1px solid var(--ed-border); border-radius: 8px;
+}
+.ed-seg > button {
+  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px;
+  font: inherit; font-size: 12.5px; font-weight: 500; color: #4b5563; white-space: nowrap;
+  background: transparent; border: 1px solid transparent; border-radius: 6px; cursor: pointer;
+  transition: background .12s, color .12s, box-shadow .12s;
+}
+.ed-seg > button:hover { color: var(--ed-text); }
+.ed-seg > button[aria-pressed="true"] {
+  background: #fff; color: var(--ed-text); font-weight: 600;
+  border-color: var(--ed-border); box-shadow: 0 1px 2px rgba(16,24,40,0.08);
+}
+.ed-seg-fill { display: flex; }
+.ed-seg-fill > button { flex: 1 1 auto; justify-content: center; }
+.ed-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.ed-zoom > button { width: 30px; padding: 0; justify-content: center; }
+.ed-zoom > span { display: inline-flex; align-items: center; justify-content: center; min-width: 46px; font-size: 12.5px; font-weight: 600; color: #374151; font-variant-numeric: tabular-nums; }
+.ed-tiles { display: flex; flex-wrap: wrap; gap: 6px; }
+.ed-tile {
+  width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 18px; line-height: 1; background: #fff; border: 1px solid var(--ed-border); border-radius: 8px;
+  cursor: pointer; transition: border-color .12s, background .12s;
+}
+.ed-tile:hover { border-color: var(--ed-accent); background: #f0fdf4; }
+.ed-lot-chip {
+  display: inline-flex; align-items: center; height: 26px; padding: 0 10px; margin-left: 8px;
+  font-size: 13px; font-weight: 700; color: var(--ed-accent); background: #f0fdf4;
+  border: 1px solid #bbf7d0; border-radius: 6px; letter-spacing: .01em;
+}
+.ed-range { width: 100%; accent-color: var(--ed-accent); }
+.ed-value { font-size: 12.5px; font-weight: 600; color: #374151; min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+.ed-card { background: var(--ed-subtle); border: 1px solid var(--ed-border); border-radius: 8px; padding: 14px 16px; }
+.ed-code { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--ed-accent); user-select: all; white-space: pre-wrap; word-break: break-all; }
+.ed-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #374151; cursor: pointer; }
+.ed-check input { width: 16px; height: 16px; accent-color: var(--ed-accent); margin: 0; }
+.ed-file { font: inherit; font-size: 12.5px; color: #4b5563; }
+.ed-file::file-selector-button {
+  font: inherit; font-size: 12.5px; font-weight: 600; color: #374151; height: 32px; padding: 0 12px; margin-right: 10px;
+  background: #fff; border: 1px solid var(--ed-border-strong); border-radius: 8px; cursor: pointer;
+}
+.ed-file::file-selector-button:hover { background: var(--ed-subtle); }
+.ed-note { font-size: 11.5px; color: #9ca3af; margin: 6px 0 0; }
+.ed-footer { padding: 14px 20px; background: var(--ed-subtle); border-top: 1px solid var(--ed-border); border-radius: 0 0 8px 8px; }
+.ed-toolbar { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; padding: 14px 16px 0; }
+.ed-modebar { max-width: 900px; margin: 0 auto 10px; display: flex; justify-content: flex-end; gap: 8px; padding: 0 16px; }
+.ed-modal-back { position: fixed; inset: 0; background: rgba(17,24,39,0.45); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 16px; }
+.ed-modal { background: #fff; border-radius: 8px; width: 380px; max-width: 100%; box-shadow: 0 20px 48px rgba(16,24,40,0.22); overflow: hidden; }
+.ed-modal-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--ed-border); }
+.ed-modal-body { padding: 18px 20px; display: grid; gap: 14px; }
+.ed-modal-foot { padding: 14px 20px; display: flex; justify-content: flex-end; gap: 8px; background: var(--ed-subtle); border-top: 1px solid var(--ed-border); }
+.ed-pop {
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  width: 240px; background: #fff; border: 1px solid var(--ed-border); border-radius: 8px;
+  padding: 12px; box-shadow: 0 10px 28px rgba(16,24,40,0.18); z-index: 500; display: grid; gap: 10px;
+}
+.ed-pop .ed-label { margin-bottom: 4px; }
+.ed-pop .ed-input { height: 32px; font-size: 12.5px; }
+.ed-pop textarea.ed-input { min-height: 60px; height: auto; }
+@media (max-width: 620px) {
+  .ed-section { padding: 14px 14px; }
+  .ed-footer { padding: 12px 14px; }
+  .ed-grid { grid-template-columns: 1fr; gap: 12px; }
+  .ed-grid-3 { grid-template-columns: 1fr 1fr; }
+  .ed-modebar { justify-content: center; flex-wrap: wrap; }
+  .ed-modebar > .ed-btn { flex: 1 1 150px; }
+  .ed-toolbar { padding: 10px 10px 0; gap: 8px; }
+  .ed-seg > button { padding: 0 9px; font-size: 12px; }
 }
 .map-zoom-ctl {
   position: absolute; top: 8px; right: 8px; z-index: 300;
@@ -1654,17 +1808,33 @@ export default function AlohaMap() {
     return () => clearTimeout(t);
   }, [lotSearch]);
 
+  // Oct 30 (per Mely — "in edit mode the lots move from their position"): edit mode draws
+  // each lot in pixels (react-rnd), worked out from this measured map size, while preview
+  // draws the same saved % directly. The size used to be measured only on load and on a
+  // window resize — but switching to edit mode changes the map's width without any window
+  // resize (the preview frame's 2px border goes away, the taller editor page brings a
+  // scrollbar, the narrow-screen padding changes), so edit mode kept drawing every lot
+  // against the OLD width and they slid off the picture, more toward the right/bottom.
+  // Now it watches the map box itself and always measures its real inner size (the same
+  // box the % positions in preview are relative to). Saved coordinates are untouched.
   useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
     const update = () => {
-      if (containerRef.current) {
-        const w = containerRef.current.offsetWidth;
-        setScale({ w, h: w * MAP_ASPECT_RATIO });
-      }
+      // computed width/height = the exact (sub-pixel) inner box, unaffected by the
+      // pan/zoom transform; clientWidth would round to whole pixels.
+      const cs = window.getComputedStyle(el);
+      const w = parseFloat(cs.width) || el.clientWidth;
+      if (!w) return;
+      const h = parseFloat(cs.height) || el.clientHeight || w * MAP_ASPECT_RATIO;
+      setScale((prev) => (Math.abs(prev.w - w) < 0.01 && Math.abs(prev.h - h) < 0.01 ? prev : { w, h }));
     };
     update();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    if (ro) ro.observe(el);
     window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, [previewWidth]);
+    return () => { if (ro) ro.disconnect(); window.removeEventListener("resize", update); };
+  }, [previewWidth, editMode, !!confirmed]);
 
   useEffect(() => {
     async function loadData() {
@@ -1893,35 +2063,26 @@ export default function AlohaMap() {
       </div>
 
       {canEditMap && editMode && (
-        <div className="map-edit-toolbar" style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", alignItems:"center", gap:8, padding:"12px 16px 0" }}>
-          <button
-            onClick={() => setPreviewWidth(null)}
-            style={{ background: previewWidth === null ? "#166534" : "#e5e7eb", color: previewWidth === null ? "#fff" : "#374151", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}
-          >
-            📐 Auto (This Screen)
-          </button>
-          <button
-            onClick={() => setPreviewWidth(900)}
-            style={{ background: previewWidth === 900 ? "#166534" : "#e5e7eb", color: previewWidth === 900 ? "#fff" : "#374151", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}
-          >
-            💻 Desktop View
-          </button>
-          <button
-            onClick={() => setPreviewWidth(390)}
-            style={{ background: previewWidth === 390 ? "#166534" : "#e5e7eb", color: previewWidth === 390 ? "#fff" : "#374151", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}
-          >
-            📱 Mobile View
-          </button>
-          <div style={{ display:"flex", alignItems:"center", gap:6, background:"#e5e7eb", borderRadius:8, padding:"4px 6px", marginLeft:8 }}>
-            <button
+        <div className="map-edit-toolbar ed ed-toolbar">
+          <div className="ed-seg" role="group" aria-label="Preview width">
+            <button type="button" aria-pressed={previewWidth === null} onClick={() => setPreviewWidth(null)}>
+              <EdIcon name="auto" /> Auto (This Screen)
+            </button>
+            <button type="button" aria-pressed={previewWidth === 900} onClick={() => setPreviewWidth(900)}>
+              <EdIcon name="monitor" /> Desktop View
+            </button>
+            <button type="button" aria-pressed={previewWidth === 390} onClick={() => setPreviewWidth(390)}>
+              <EdIcon name="phone" /> Mobile View
+            </button>
+          </div>
+          <div className="ed-seg ed-zoom" role="group" aria-label="Editor zoom">
+            <button type="button" aria-label="Zoom out"
               onClick={() => setZoomLevel(z => Math.max(1, Math.round((z - 0.25) * 100) / 100))}
-              style={{ background:"#fff", border:"none", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:16, fontWeight:700, color:"#374151" }}
-            >－</button>
-            <span style={{ fontSize:12, fontWeight:700, color:"#374151", minWidth:40, textAlign:"center" }}>{Math.round(zoomLevel * 100)}%</span>
-            <button
+            ><EdIcon name="minus" /></button>
+            <span>{Math.round(zoomLevel * 100)}%</span>
+            <button type="button" aria-label="Zoom in"
               onClick={() => setZoomLevel(z => Math.min(2.5, Math.round((z + 0.25) * 100) / 100))}
-              style={{ background:"#fff", border:"none", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:16, fontWeight:700, color:"#374151" }}
-            >＋</button>
+            ><EdIcon name="plus" /></button>
           </div>
         </div>
       )}
@@ -1958,7 +2119,8 @@ export default function AlohaMap() {
           style={{
             position:"relative", width:"100%", display:"inline-block", userSelect:"none",
             ...(previewWidth ? { border:"3px solid #166534", borderRadius:12, boxShadow:"0 4px 20px rgba(0,0,0,0.15)" } : {}),
-            transform: `translate(${mapPan.x}px, ${mapPan.y}px) scale(${mapScale})`,
+            // edit mode is always drawn at true 1:1 (react-rnd can't follow a scaled parent)
+            transform: editMode ? "none" : `translate(${mapPan.x}px, ${mapPan.y}px) scale(${mapScale})`,
             transformOrigin: "center center",
             transition: isPanning ? "none" : "transform 0.15s ease-out",
           }}
@@ -2053,19 +2215,27 @@ export default function AlohaMap() {
                   }}
                   bounds="parent"
                   style={{
+                    cursor:"move",
+                    boxSizing:"border-box",
+                    zIndex: isActive ? 50 : 10,
+                  }}
+                  onClick={() => setActiveEditLot(lot)}
+                >
+                  {/* Oct 30: the lot's look (and its rotation) lives on this inner box — react-rnd
+                      places the outer box with its own CSS transform, which silently replaced the
+                      rotate() here, so rotated lots showed un-rotated in edit mode. */}
+                  <div style={{
+                    width:"100%", height:"100%",
                     background: isActive ? "rgba(251,191,36,0.85)" : lotColors[lot] ? lotColors[lot] : STATUS_COLORS[status],
                     borderRadius: borderRadius,
                     clipPath: clipPath,
                     border: isActive ? "2px solid #f59e0b" : "1.5px solid rgba(255,255,255,0.6)",
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    cursor:"move",
                     boxSizing:"border-box",
-                    zIndex: isActive ? 50 : 10,
                     transform: `rotate(${rotations[lot] || 0}deg)`,
-                  }}
-                  onClick={() => setActiveEditLot(lot)}
-                >
-                  <span style={{ fontSize:"clamp(5px,0.85vw,10px)", fontWeight:700, color:"#fff", textShadow:"0 1px 3px rgba(0,0,0,0.8)", pointerEvents:"none" }}>{lot}</span>
+                  }}>
+                    <span style={{ fontSize:"clamp(5px,0.85vw,10px)", fontWeight:700, color:"#fff", textShadow:"0 1px 3px rgba(0,0,0,0.8)", pointerEvents:"none" }}>{lot}</span>
+                  </div>
                 </Rnd>
               );
             }
@@ -2288,48 +2458,57 @@ export default function AlohaMap() {
                 >{item.emoji}</span>
 
                 {(editMode || isInfoOnly) && activeEmoji === item.id && (
-                  <div onClick={e => e.stopPropagation()} style={{ position:"absolute", bottom:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)", background:"#fff", border:"1.5px solid #d1d5db", borderRadius:10, padding:"10px 12px", minWidth:210, boxShadow:"0 4px 16px rgba(0,0,0,0.2)", zIndex:500, fontFamily:"sans-serif" }}>
-                    <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>POPUP TITLE</div>
-                    <input
-                      value={item.label || ""}
-                      onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, label: e.target.value } : em))}
-                      placeholder="e.g. Pool, Office..."
-                      style={{ width:"100%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, marginBottom:6, boxSizing:"border-box" }}
-                    />
-                    <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>POPUP INFO (one per line)</div>
-                    <textarea
-                      value={item.info || ""}
-                      onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, info: e.target.value } : em))}
-                      placeholder="Hours: 9am-9pm&#10;Rules: No running&#10;Price: Free"
-                      rows={3}
-                      style={{ width:"100%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, marginBottom:6, boxSizing:"border-box", resize:"vertical" }}
-                    />
-                    <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>SIZE: {rawSize}px</div>
-                    <input
-                      type="range" min="12" max="80" value={rawSize}
-                      onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, size: parseInt(e.target.value) } : em))}
-                      style={{ width:"100%", marginBottom:8 }}
-                    />
+                  <div onClick={e => e.stopPropagation()} className="ed ed-pop">
+                    <div>
+                      <label className="ed-label">Popup title</label>
+                      <input
+                        className="ed-input"
+                        value={item.label || ""}
+                        onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, label: e.target.value } : em))}
+                        placeholder="e.g. Pool, Office..."
+                      />
+                    </div>
+                    <div>
+                      <label className="ed-label">Popup info (one per line)</label>
+                      <textarea
+                        className="ed-input"
+                        value={item.info || ""}
+                        onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, info: e.target.value } : em))}
+                        placeholder="Hours: 9am-9pm&#10;Rules: No running&#10;Price: Free"
+                        rows={3}
+                      />
+                    </div>
+                    <div>
+                      <div style={{ display:"flex", justifyContent:"space-between" }}>
+                        <label className="ed-label">Size</label>
+                        <span className="ed-value" style={{ fontSize:12 }}>{rawSize}px</span>
+                      </div>
+                      <input
+                        type="range" min="12" max="80" value={rawSize} className="ed-range"
+                        onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, size: parseInt(e.target.value) } : em))}
+                      />
+                    </div>
                     <button
+                      type="button"
+                      className="ed-btn ed-btn-danger ed-btn-sm ed-btn-block"
                       onClick={() => { setEmojis(prev => prev.filter(em => em.id !== item.id)); setActiveEmoji(null); }}
-                      style={{ background:"#ef4444", color:"#fff", border:"none", borderRadius:6, padding:"5px 10px", cursor:"pointer", fontSize:12, width:"100%", fontWeight:600 }}
-                    >🗑 Delete</button>
+                    ><EdIcon name="trash" size={13} /> Delete</button>
                     {isAdmin && (
-                      <div style={{ marginTop:8, paddingTop:8, borderTop:"1px solid #e5e7eb" }}>
-                        <div style={{ fontSize:11, color:"#6b7280", marginBottom:3, fontWeight:600 }}>COORDINATES (master admin only)</div>
+                      <div style={{ paddingTop:10, borderTop:"1px solid #e5e7eb" }}>
+                        <label className="ed-label">Coordinates (master admin only)</label>
                         <div style={{ display:"flex", gap:6 }}>
                           <input
+                            className="ed-input"
                             type="number" step="0.1" value={item.x}
                             onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, x: parseFloat(e.target.value) || 0 } : em))}
-                            style={{ width:"50%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, boxSizing:"border-box" }}
                           />
                           <input
+                            className="ed-input"
                             type="number" step="0.1" value={item.y}
                             onChange={e => setEmojis(prev => prev.map(em => em.id === item.id ? { ...em, y: parseFloat(e.target.value) || 0 } : em))}
-                            style={{ width:"50%", padding:"4px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:12, boxSizing:"border-box" }}
                           />
                         </div>
-                        <div style={{ fontSize:10, color:"#9ca3af", marginTop:3 }}>x, y (% of map)</div>
+                        <div className="ed-note" style={{ marginTop:4 }}>x, y (% of map)</div>
                       </div>
                     )}
                   </div>
@@ -2397,57 +2576,57 @@ export default function AlohaMap() {
       )}
 
             {/* Edit/Preview Toggle */}
-      <div className="map-mode-row" style={{ maxWidth:900, margin:"0 auto 10px", display:"flex", justifyContent:"flex-end", gap:8 }}>
+      <div className="map-mode-row ed ed-modebar">
         {canEditMap && editMode && (
-          <button
-            onClick={() => setShowParkSettings(true)}
-            style={{ background:"#374151", color:"#fff", border:"none", padding:"8px 20px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}
-          >
-            ⚙️ Park Settings
+          <button type="button" className="ed-btn ed-btn-secondary" onClick={() => setShowParkSettings(true)}>
+            <EdIcon name="gear" /> Park Settings
           </button>
         )}
         {canEditMap && (
           <button
+            type="button"
+            className={editMode ? "ed-btn ed-btn-secondary" : "ed-btn ed-btn-primary"}
             onClick={() => { setEditMode(m => !m); setActiveEmoji(null); }}
-            style={{ background: editMode ? "#f59e0b" : "#16a34a", color:"#fff", border:"none", padding:"8px 20px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700, boxShadow:"0 2px 6px rgba(0,0,0,0.15)" }}
           >
-            {editMode ? "👁 Switch to Preview Mode" : "✏️ Switch to Edit Mode"}
+            <EdIcon name={editMode ? "eye" : "pencil"} />
+            {editMode ? "Switch to Preview Mode" : "Switch to Edit Mode"}
           </button>
         )}
       </div>
 
       {showParkSettings && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:2000 }}>
-          <div style={{ background:"#fff", borderRadius:12, padding:24, width:340, maxWidth:"90vw", fontFamily:"sans-serif" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-              <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>Park Settings</h3>
-              <button onClick={()=>setShowParkSettings(false)} style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#888" }}>✕</button>
+        <div className="ed ed-modal-back">
+          <div className="ed-modal" role="dialog" aria-label="Park Settings">
+            <div className="ed-modal-head">
+              <h3 className="ed-title" style={{ fontSize:15 }}>Park Settings</h3>
+              <button type="button" aria-label="Close" className="ed-btn ed-btn-ghost ed-btn-icon" onClick={()=>setShowParkSettings(false)}><EdIcon name="x" size={16} /></button>
             </div>
-            <div style={{ marginBottom:12 }}>
-              <label style={{ fontSize:12, color:"#6b7280", display:"block", marginBottom:4 }}>Check-in Time</label>
-              <input type="text" value={parkSettings.checkin_time}
-                onChange={e=>setParkSettings(p=>({...p, checkin_time:e.target.value}))}
-                style={{ width:"100%", padding:"8px 10px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
+            <div className="ed-modal-body">
+              <div>
+                <label className="ed-label">Check-in time</label>
+                <input type="text" className="ed-input" value={parkSettings.checkin_time}
+                  onChange={e=>setParkSettings(p=>({...p, checkin_time:e.target.value}))} />
+              </div>
+              <div>
+                <label className="ed-label">Check-out time</label>
+                <input type="text" className="ed-input" value={parkSettings.checkout_time}
+                  onChange={e=>setParkSettings(p=>({...p, checkout_time:e.target.value}))} />
+              </div>
+              <div>
+                <label className="ed-label">Cancellation window (days before arrival for full refund)</label>
+                <input type="number" className="ed-input" value={parkSettings.cancellation_days}
+                  onChange={e=>setParkSettings(p=>({...p, cancellation_days:parseInt(e.target.value,10) || 0}))} />
+              </div>
             </div>
-            <div style={{ marginBottom:12 }}>
-              <label style={{ fontSize:12, color:"#6b7280", display:"block", marginBottom:4 }}>Check-out Time</label>
-              <input type="text" value={parkSettings.checkout_time}
-                onChange={e=>setParkSettings(p=>({...p, checkout_time:e.target.value}))}
-                style={{ width:"100%", padding:"8px 10px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
+            <div className="ed-modal-foot">
+              <button type="button" className="ed-btn ed-btn-primary ed-btn-block" onClick={async ()=>{
+                await saveParkSettings(parkSettings, editToken);
+                alert("Park settings saved!");
+                setShowParkSettings(false);
+              }}>
+                Save Settings
+              </button>
             </div>
-            <div style={{ marginBottom:16 }}>
-              <label style={{ fontSize:12, color:"#6b7280", display:"block", marginBottom:4 }}>Cancellation Window (days before arrival for full refund)</label>
-              <input type="number" value={parkSettings.cancellation_days}
-                onChange={e=>setParkSettings(p=>({...p, cancellation_days:parseInt(e.target.value,10) || 0}))}
-                style={{ width:"100%", padding:"8px 10px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
-            </div>
-            <button onClick={async ()=>{
-              await saveParkSettings(parkSettings, editToken);
-              alert("Park settings saved!");
-              setShowParkSettings(false);
-            }} style={{ width:"100%", background:"#16a34a", color:"#fff", border:"none", padding:"10px", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:700 }}>
-              Save Settings
-            </button>
           </div>
         </div>
       )}
@@ -2488,23 +2667,25 @@ export default function AlohaMap() {
       )}
 
       {/* Edit Panel */}
+      {/* Oct 30 (per Mely): restyled as a clean admin panel — same controls, same behavior. */}
       {editMode && (
-        <div style={{ maxWidth:900, margin:"0 auto 20px", background:"#fff", border:"2px solid #f59e0b", borderRadius:14, padding:16, fontFamily:"sans-serif" }}>
-          
+        <div className="ed ed-panel" data-edit-panel>
+
           {/* Add Lot — master only */}
           {isAdmin && (
-          <div style={{ marginBottom:14, padding:12, background:"#f0fdf4", borderRadius:10 }}>
-            <strong style={{ fontSize:13, color:"#166534" }}>+ Add New Lot</strong>
-
-            <div style={{ display:"flex", gap:8, marginTop:8 }}>
-              <input value={newLotName} onChange={e=>setNewLotName(e.target.value.toUpperCase())}
-                placeholder="e.g. E1" style={{ flex:1, padding:"8px 12px", border:"1px solid #d1d5db", borderRadius:8, fontSize:14 }} />
-              <button onClick={()=>{
+          <div className="ed-section">
+            <div className="ed-section-head">
+              <h4 className="ed-title">Add new lot</h4>
+            </div>
+            <div className="ed-row">
+              <input className="ed-input" value={newLotName} onChange={e=>setNewLotName(e.target.value.toUpperCase())}
+                placeholder="Lot name, e.g. E1" style={{ flex:1 }} />
+              <button type="button" className="ed-btn ed-btn-secondary" onClick={()=>{
                 if (!newLotName) return;
                 setDraftLots(prev=>({ ...prev, [newLotName]: [10, 10, 5, 3] }));
                 setActiveEditLot(newLotName);
                 setNewLotName("");
-              }} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontWeight:600 }}>Add</button>
+              }}><EdIcon name="plus" /> Add</button>
             </div>
             {/* Oct 20 (per Mely): lots that exist in the system (Generate
                 Spaces) but aren't on this map yet are lined up at the top
@@ -2514,7 +2695,7 @@ export default function AlohaMap() {
                 .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
               if (!missing.length) return null;
               return (
-                <button onClick={() => {
+                <button type="button" className="ed-btn ed-btn-secondary ed-btn-block" onClick={() => {
                   const sizes = Object.values(draftLots);
                   const avg = (i, d) => sizes.length ? Math.round(sizes.reduce((t, v) => t + v[i], 0) / sizes.length * 10) / 10 : d;
                   const w = Math.min(avg(2, 4), 8), h = Math.min(avg(3, 5), 10);
@@ -2527,7 +2708,7 @@ export default function AlohaMap() {
                     });
                     return next;
                   });
-                }} style={{ marginTop:8, width:"100%", background:"#fff", color:"#166534", border:"1px solid #86efac", padding:"8px 12px", borderRadius:8, cursor:"pointer", fontWeight:600, fontSize:13 }}>
+                }} style={{ marginTop:10 }}>
                   Place missing lots ({missing.length}) at the top of the map
                 </button>
               );
@@ -2536,389 +2717,397 @@ export default function AlohaMap() {
           )}
 
           {/* Add Emojis */}
-          <div style={{ marginBottom:14, padding:12, background:"#fef9c3", borderRadius:10 }}>
-            <strong style={{ fontSize:13, color:"#854d0e" }}>Add Emoji/Sticker</strong>
-            <div style={{ fontSize:11, color:"#92400e", marginBottom:6, marginTop:2 }}>Click to place at center, then drag into position</div>
-            <div style={{ marginBottom:4, fontSize:11, color:"#6b7280", fontWeight:600 }}>AMENITIES</div>
-            <div style={{ display:"flex", gap:6, marginBottom:8, flexWrap:"wrap" }}>
+          <div className="ed-section">
+            <div className="ed-section-head">
+              <h4 className="ed-title">Add emoji / sticker</h4>
+              <span className="ed-hint">Click to place at center, then drag into position</span>
+            </div>
+            <div className="ed-sublabel" style={{ marginTop:0 }}>Amenities</div>
+            <div className="ed-tiles">
               {["🏢","🏊","🎯","⛽","🗑️","🔥","🧺","🚹","🚺","🅿️","🏛️","⛹🏽","🚑","🚐","♻️","🚻"].map(emoji=>(
-                <button key={emoji} onClick={()=>{
+                <button type="button" key={emoji} className="ed-tile" onClick={()=>{
                   setEmojis(prev=>[...prev, { id: Date.now(), emoji, x:50, y:50, label:"" }]);
-                }} style={{ fontSize:16, background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:8, padding:"4px 8px", cursor:"pointer" }}>{emoji}</button>
+                }}>{emoji}</button>
               ))}
             </div>
-            <div style={{ marginBottom:4, fontSize:11, color:"#6b7280", fontWeight:600 }}>NATURE & DECOR</div>
-            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+            <div className="ed-sublabel">Nature &amp; decor</div>
+            <div className="ed-tiles">
               {["⭐","🌴","🌳","🎄","🎃","👻","☃️","❄️","🌺","🐄","🦌","🔥"].map(emoji=>(
-                <button key={emoji} onClick={()=>{
+                <button type="button" key={emoji} className="ed-tile" onClick={()=>{
                   setEmojis(prev=>[...prev, { id: Date.now(), emoji, x:50, y:50, label:"" }]);
-                }} style={{ fontSize:16, background:"none", border:"1px solid #d1d5db", borderRadius:8, padding:"4px 8px", cursor:"pointer" }}>{emoji}</button>
+                }}>{emoji}</button>
               ))}
             </div>
           </div>
 
           {/* Add Text — master only */}
           {isAdmin && (
-          <div style={{ marginBottom:14, padding:12, background:"#eff6ff", borderRadius:10 }}>
-            <strong style={{ fontSize:13, color:"#1e40af" }}>Add Text to Map</strong>
-            <div style={{ display:"flex", gap:8, marginTop:8 }}>
-              <input id="textInput" placeholder="Type text..." style={{ flex:1, padding:"8px 12px", border:"1px solid #d1d5db", borderRadius:8, fontSize:14 }} />
-              <input id="textSize" type="number" defaultValue="16" min="8" max="72" style={{ width:60, padding:"8px", border:"1px solid #d1d5db", borderRadius:8, fontSize:14 }} />
-              <input id="textColor" type="color" defaultValue="#000000" style={{ width:40, padding:"2px", border:"1px solid #d1d5db", borderRadius:8, cursor:"pointer" }} />
-              <button onClick={()=>{
+          <div className="ed-section">
+            <div className="ed-section-head">
+              <h4 className="ed-title">Add text to map</h4>
+            </div>
+            <div className="ed-row" style={{ alignItems:"flex-end" }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <label className="ed-label" htmlFor="textInput">Text</label>
+                <input id="textInput" className="ed-input" placeholder="Type text..." />
+              </div>
+              <div style={{ width:72 }}>
+                <label className="ed-label" htmlFor="textSize">Size</label>
+                <input id="textSize" className="ed-input" type="number" defaultValue="16" min="8" max="72" />
+              </div>
+              <div>
+                <label className="ed-label" htmlFor="textColor">Color</label>
+                <input id="textColor" className="ed-color" type="color" defaultValue="#000000" />
+              </div>
+              <button type="button" className="ed-btn ed-btn-secondary" onClick={()=>{
                 const val = document.getElementById("textInput").value;
                 const size = document.getElementById("textSize").value;
                 const color = document.getElementById("textColor").value;
                 if (!val) return;
                 setTexts(prev=>[...prev, { id: Date.now(), text: val, size: parseInt(size), color, x: 50, y: 50 }]);
                 document.getElementById("textInput").value = "";
-              }} style={{ background:"#1e40af", color:"#fff", border:"none", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontWeight:600 }}>Add</button>
+              }}><EdIcon name="plus" /> Add</button>
             </div>
           </div>
           )}
 
           {canEditMap && activeEditLot && draftLots[activeEditLot] && (
             <>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-                <strong style={{ fontSize:15 }}>Editing: <span style={{ color:"#16a34a" }}>{activeEditLot}</span></strong>
-                <div style={{ display:"flex", gap:8 }}>
+              <div className="ed-section">
+                <div className="ed-section-head" style={{ alignItems:"center", marginBottom:14 }}>
+                  <h4 className="ed-title" style={{ display:"flex", alignItems:"center" }}>Editing <span className="ed-lot-chip">{activeEditLot}</span></h4>
+                  <div className="ed-row">
+                    {isAdmin && (
+                    <>
+                    <button type="button" className="ed-btn ed-btn-danger ed-btn-sm" onClick={()=>setConfirmDeleteLot(activeEditLot)}><EdIcon name="trash" size={13} /> Delete</button>
+                    {confirmDeleteLot && (
+                      <div onClick={()=>setConfirmDeleteLot(null)} className="ed-modal-back" style={{ zIndex:100000 }}>
+                        <div onClick={(e)=>e.stopPropagation()} className="ed-modal" role="dialog" aria-label={`Delete lot ${confirmDeleteLot}`}>
+                          <div className="ed-modal-body" style={{ gap:10, paddingTop:20 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                              <div style={{ width:36, height:36, borderRadius:8, background:"#fef2f2", color:"#dc2626", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><EdIcon name="trash" size={18} /></div>
+                              <div style={{ fontSize:16, fontWeight:600, color:"#111827" }}>Delete lot {confirmDeleteLot}?</div>
+                            </div>
+                            <p style={{ margin:0, fontSize:13, lineHeight:1.55, color:"#4b5563" }}>
+                              This removes the lot from the map. Press <strong>Save</strong> afterwards to make it permanent. Payment and reservation history is not deleted.
+                            </p>
+                          </div>
+                          <div className="ed-modal-foot">
+                            <button type="button" className="ed-btn ed-btn-secondary" onClick={()=>setConfirmDeleteLot(null)}>Cancel</button>
+                            <button type="button" className="ed-btn ed-btn-danger-solid" onClick={()=>{
+                              const lot = confirmDeleteLot;
+                              setDraftLots(prev=>{ const n={...prev}; delete n[lot]; return n; });
+                              setActiveEditLot(null);
+                              setConfirmDeleteLot(null);
+                            }}>Delete lot</button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    </>
+                    )}
+                    <button type="button" aria-label="Close" className="ed-btn ed-btn-ghost ed-btn-icon" onClick={()=>setActiveEditLot(null)}><EdIcon name="x" size={16} /></button>
+                  </div>
+                </div>
+
+                <div className="ed-grid">
+                  <div className="ed-span">
+                    <span className="ed-label">Status / color</span>
+                    <div className="ed-seg ed-seg-fill" role="group" aria-label="Lot status">
+                      {ED_STATUS_OPTIONS.map(([s,c,label])=>(
+                        <button type="button" key={s} aria-pressed={statuses[activeEditLot]===s} onClick={async ()=>{
+                          setStatuses(prev=>({...prev,[activeEditLot]:s}));
+                          if (s === "for_sale") ensureRealEstateListing(activeEditLot, editToken);
+                          if (s === "for_rent") ensureRentListing(activeEditLot, editToken);
+                          // Write straight to rv_lots (the single source of truth
+                          // shared with lease applications/reservations) so this
+                          // manual change is immediately reflected everywhere,
+                          // not just on this map.
+                          try {
+                            await fetch('/api/set-lot-status', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ lotName: activeEditLot, status: s, parkId: PARK_ID, token: editToken }),
+                            });
+                          } catch (err) {
+                            console.error('Error saving lot status:', err);
+                          }
+                        }}>
+                          <span className="ed-dot" style={{ background:c }} />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="ed-label">Custom color</span>
+                    <div className="ed-row">
+                      <input type="color" className="ed-color" value={lotColors[activeEditLot] || "#16a34a"}
+                        onChange={e=>setLotColors(prev=>({...prev,[activeEditLot]:e.target.value}))} />
+                      <span className="ed-hint" style={{ flex:1 }}>Pick any color for this lot</span>
+                      <button type="button" className="ed-btn ed-btn-secondary ed-btn-sm" onClick={()=>setLotColors(prev=>{ const n={...prev}; delete n[activeEditLot]; return n; })}>Reset</button>
+                    </div>
+                  </div>
+
                   {isAdmin && (
-                  <>
-                  <button onClick={()=>setConfirmDeleteLot(activeEditLot)} style={{ background:"#ef4444", color:"#fff", border:"none", padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Delete</button>
-                  {confirmDeleteLot && (
-                    <div onClick={()=>setConfirmDeleteLot(null)} style={{ position:"fixed", inset:0, background:"rgba(17,24,39,0.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100000, padding:16 }}>
-                      <div onClick={(e)=>e.stopPropagation()} style={{ background:"#fff", borderRadius:14, padding:"22px 24px", width:"100%", maxWidth:380, boxShadow:"0 20px 50px rgba(0,0,0,0.35)", fontFamily:"system-ui, -apple-system, Segoe UI, sans-serif" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-                          <div style={{ width:36, height:36, borderRadius:999, background:"#fee2e2", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🗑️</div>
-                          <div style={{ fontSize:17, fontWeight:700, color:"#111827" }}>Delete lot {confirmDeleteLot}?</div>
-                        </div>
-                        <p style={{ margin:"0 0 18px", fontSize:13.5, lineHeight:1.5, color:"#4b5563" }}>
-                          This removes the lot from the map. Press <strong>Save</strong> afterwards to make it permanent. Payment and reservation history is not deleted.
-                        </p>
-                        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-                          <button onClick={()=>setConfirmDeleteLot(null)} style={{ background:"#f3f4f6", color:"#374151", border:"none", padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13.5, fontWeight:600 }}>Cancel</button>
-                          <button onClick={()=>{
-                            const lot = confirmDeleteLot;
-                            setDraftLots(prev=>{ const n={...prev}; delete n[lot]; return n; });
-                            setActiveEditLot(null);
-                            setConfirmDeleteLot(null);
-                          }} style={{ background:"#dc2626", color:"#fff", border:"none", padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13.5, fontWeight:700 }}>Delete lot</button>
-                        </div>
-                      </div>
+                  <div>
+                    <span className="ed-label">Rotation</span>
+                    <div className="ed-row" style={{ height:36 }}>
+                      <input type="range" className="ed-range" min="0" max="360" value={rotations[activeEditLot] || 0}
+                        onChange={e=>setRotations(prev=>({...prev,[activeEditLot]:parseInt(e.target.value)}))}
+                        style={{ flex:1 }} />
+                      <span className="ed-value">{rotations[activeEditLot] || 0}°</span>
+                      <button type="button" className="ed-btn ed-btn-secondary ed-btn-sm" onClick={()=>setRotations(prev=>({...prev,[activeEditLot]:0}))}>Reset</button>
                     </div>
+                  </div>
                   )}
-                  </>
+
+                  {isAdmin && (
+                  <div className="ed-span">
+                    <span className="ed-label">Shape</span>
+                    <div className="ed-seg" role="group" aria-label="Lot shape">
+                      {["rectangle","rounded","circle","parallelogram-left","parallelogram-right","diamond","hexagon"].map(s=>(
+                        <button type="button" key={s} aria-pressed={lotShapes[activeEditLot]===s} onClick={()=>setLotShapes(prev=>({...prev,[activeEditLot]:s}))}>
+                          {edShapeLabel(s)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   )}
-                  <button onClick={()=>setActiveEditLot(null)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer", color:"#888" }}>✕</button>
                 </div>
               </div>
-              <div style={{ marginBottom:12 }}>
-                <span style={{ fontSize:12, fontWeight:600, color:"#6b7280" }}>STATUS / COLOR</span>
-                <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
-                  {[["available","#16a34a","🟢 Available"],["occupied","#dc2626","🔴 Occupied"],["reserved","#ca8a04","🟡 Reserved"],["maintenance","#4b5563","⚫ Maintenance"],["for_sale","#ac67dd","🏠 For Sale"],["for_rent","#8b5cf6","🔑 For Rent"]].map(([s,c,label])=>(
-                    <button key={s} onClick={async ()=>{
-                      setStatuses(prev=>({...prev,[activeEditLot]:s}));
-                      if (s === "for_sale") ensureRealEstateListing(activeEditLot, editToken);
-                      if (s === "for_rent") ensureRentListing(activeEditLot, editToken);
-                      // Write straight to rv_lots (the single source of truth
-                      // shared with lease applications/reservations) so this
-                      // manual change is immediately reflected everywhere,
-                      // not just on this map.
-                      try {
-                        await fetch('/api/set-lot-status', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ lotName: activeEditLot, status: s, parkId: PARK_ID, token: editToken }),
-                        });
-                      } catch (err) {
-                        console.error('Error saving lot status:', err);
-                      }
-                    }}
-                      style={{ background: statuses[activeEditLot]===s ? c : "#f3f4f6", color: statuses[activeEditLot]===s ? "#fff" : "#374151", border:`2px solid ${c}`, padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600 }}>
-                      {label}
-                    </button>
-                  ))}
+
+              <div className="ed-section">
+                <div className="ed-section-head">
+                  <h4 className="ed-title">Lot details</h4>
+                  <span className="ed-hint">Visible to guests</span>
                 </div>
-              </div>
-              <div style={{ marginBottom:10 }}>
-                <span style={{ fontSize:12, fontWeight:600, color:"#6b7280" }}>CUSTOM COLOR</span>
-                <div style={{ display:"flex", gap:8, marginTop:6, alignItems:"center" }}>
-                  <input type="color" value={lotColors[activeEditLot] || "#16a34a"}
-                    onChange={e=>setLotColors(prev=>({...prev,[activeEditLot]:e.target.value}))}
-                    style={{ width:40, height:32, padding:2, border:"1px solid #d1d5db", borderRadius:8, cursor:"pointer" }} />
-                  <span style={{ fontSize:12, color:"#6b7280" }}>Pick any color for this lot</span>
-                  <button onClick={()=>setLotColors(prev=>{ const n={...prev}; delete n[activeEditLot]; return n; })}
-                    style={{ background:"#f3f4f6", border:"1px solid #d1d5db", padding:"4px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Reset</button>
-                </div>
-              </div>
-              {isAdmin && (
-              <div style={{ marginBottom:10 }}>
-                <span style={{ fontSize:12, fontWeight:600, color:"#6b7280" }}>ROTATION</span>
-                <div style={{ display:"flex", gap:8, marginTop:6, alignItems:"center" }}>
-                  <input type="range" min="0" max="360" value={rotations[activeEditLot] || 0}
-                    onChange={e=>setRotations(prev=>({...prev,[activeEditLot]:parseInt(e.target.value)}))}
-                    style={{ flex:1 }} />
-                  <span style={{ fontSize:12, minWidth:35 }}>{rotations[activeEditLot] || 0}deg</span>
-                  <button onClick={()=>setRotations(prev=>({...prev,[activeEditLot]:0}))}
-                    style={{ background:"#f3f4f6", border:"1px solid #d1d5db", padding:"4px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Reset</button>
-                </div>
-              </div>
-              )}
-              {isAdmin && (
-              <div style={{ marginBottom:10 }}>
-                <span style={{ fontSize:12, fontWeight:600, color:"#6b7280" }}>SHAPE</span>
-                <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
-                  {["rectangle","rounded","circle","parallelogram-left","parallelogram-right","diamond","hexagon"].map(s=>(
-                    <button key={s} onClick={()=>setLotShapes(prev=>({...prev,[activeEditLot]:s}))}
-                      style={{ background: lotShapes[activeEditLot]===s?"#16a34a":"#f3f4f6", color: lotShapes[activeEditLot]===s?"#fff":"#374151", border:"1px solid #d1d5db", padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              )}
-              <div style={{ marginBottom:12, background:"#f0fdf4", borderRadius:10, padding:12 }}>
-                <strong style={{ fontSize:13, color:"#166534" }}>Lot Details (visible to guests)</strong>
                 {activeEditLot.startsWith("S") ? (
-                  <>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:8 }}>
-                      <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Type</label>
-                        <select defaultValue={lotInfo[activeEditLot]?.lot_type || "outdoor"}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], lot_type:e.target.value}}))}
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
-                          <option value="outdoor">Outdoor</option>
-                          <option value="indoor">Indoor</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Size</label>
-                        <input type="text" defaultValue={lotInfo[activeEditLot]?.size || ""}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], size:e.target.value}}))}
-                          placeholder="e.g. 20ft x 10ft"
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
-                      </div>
+                  <div className="ed-grid">
+                    <div>
+                      <label className="ed-label">Type</label>
+                      <select className="ed-input" defaultValue={lotInfo[activeEditLot]?.lot_type || "outdoor"}
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], lot_type:e.target.value}}))}>
+                        <option value="outdoor">Outdoor</option>
+                        <option value="indoor">Indoor</option>
+                      </select>
                     </div>
-                    <div style={{ marginTop:8, display:"flex", alignItems:"center", gap:8 }}>
-                      <input type="checkbox" id="hasElec" checked={lotInfo[activeEditLot]?.has_electricity || false}
-                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], has_electricity:e.target.checked}}))} />
-                      <label htmlFor="hasElec" style={{ fontSize:12, color:"#374151" }}>Has electricity</label>
+                    <div>
+                      <label className="ed-label">Size</label>
+                      <input type="text" className="ed-input" defaultValue={lotInfo[activeEditLot]?.size || ""}
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], size:e.target.value}}))}
+                        placeholder="e.g. 20ft x 10ft" />
+                    </div>
+                    <div className="ed-span">
+                      <label className="ed-check" htmlFor="hasElec">
+                        <input type="checkbox" id="hasElec" checked={lotInfo[activeEditLot]?.has_electricity || false}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], has_electricity:e.target.checked}}))} />
+                        Has electricity
+                      </label>
                     </div>
                     {lotInfo[activeEditLot]?.has_electricity && (
-                      <div style={{ marginTop:8 }}>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Amperage</label>
-                        <select defaultValue={lotInfo[activeEditLot]?.amperage || 30}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], amperage:parseInt(e.target.value)}}))}
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
+                      <div>
+                        <label className="ed-label">Amperage</label>
+                        <select className="ed-input" defaultValue={lotInfo[activeEditLot]?.amperage || 30}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], amperage:parseInt(e.target.value)}}))}>
                           <option value={30}>30 Amp</option>
                           <option value={50}>50 Amp</option>
                           <option value={30.50}>30/50 Amp</option>
                         </select>
                       </div>
                     )}
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginTop:8 }}>
+                    <div className="ed-span ed-grid-3">
                       <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Daily ($)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.price_daily || 10}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_daily:parseFloat(e.target.value)}}))}
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
+                        <label className="ed-label">Daily ($)</label>
+                        <input type="number" className="ed-input" defaultValue={lotInfo[activeEditLot]?.price_daily || 10}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_daily:parseFloat(e.target.value)}}))} />
                       </div>
                       <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Monthly ($)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.price_monthly || 100}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_monthly:parseFloat(e.target.value)}}))}
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
+                        <label className="ed-label">Monthly ($)</label>
+                        <input type="number" className="ed-input" defaultValue={lotInfo[activeEditLot]?.price_monthly || 100}
+                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_monthly:parseFloat(e.target.value)}}))} />
                       </div>
                       <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Yearly ($)</label>
-                        <input type="number" defaultValue={lotInfo[activeEditLot]?.price_yearly || ""}
+                        <label className="ed-label">Yearly ($)</label>
+                        <input type="number" className="ed-input" defaultValue={lotInfo[activeEditLot]?.price_yearly || ""}
                           onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_yearly:parseFloat(e.target.value)}}))}
-                          placeholder="optional"
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
+                          placeholder="optional" />
                       </div>
                     </div>
-                    <div style={{ marginTop:8 }}>
-                      <label style={{ fontSize:11, color:"#6b7280", display:"block", marginBottom:3 }}>Description</label>
-                      <textarea defaultValue={lotInfo[activeEditLot]?.description || ""}
+                    <div className="ed-span">
+                      <label className="ed-label">Description</label>
+                      <textarea className="ed-input" defaultValue={lotInfo[activeEditLot]?.description || ""}
                         onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], description:e.target.value}}))}
-                        placeholder="e.g. Covered spot, near entrance..."
-                        style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box", resize:"vertical", minHeight:60 }} />
+                        placeholder="e.g. Covered spot, near entrance..." />
                     </div>
-                  </>
+                  </div>
                 ) : (
-                  <>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:8 }}>
-                      <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max RV Length (ft)</label>
-                        <input type="number" key={activeEditLot + "-max_length_ft"} defaultValue={lotInfo[activeEditLot]?.max_length_ft || lotInfo[activeEditLot]?.max_length || 45}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_length_ft:parseInt(e.target.value)}}))}
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
-                      </div>
-                      <div>
-                        {/* Aug 20 (per Mely — "no veo width no lo veo ahi?"):
-                            max_width_ft was already read/validated in the
-                            apply form (rvTooWide) and shown as plain info
-                            everywhere else, but this admin editor never had
-                            an input for it — meaning no lot could ever
-                            actually have a real value, so that validation
-                            could never fire in practice. Mirrors Max RV
-                            Length exactly. */}
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max RV Width (ft) — slide-outs extended</label>
-                        <input type="number" key={activeEditLot + "-max_width_ft"} defaultValue={lotInfo[activeEditLot]?.max_width_ft || ""}
-                          placeholder="e.g. 14"
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_width_ft:e.target.value ? parseInt(e.target.value) : null}}))}
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Amperage</label>
-                        <select key={activeEditLot + "-amp_service"} defaultValue={lotInfo[activeEditLot]?.amp_service || String(lotInfo[activeEditLot]?.amperage || 50)}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], amp_service:e.target.value}}))}
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
-                          <option value="30">30 Amp</option>
-                          <option value="50">50 Amp</option>
-                          <option value="30/50">30/50 Amp</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max Driver Side Slide-Outs</label>
-                        <select key={activeEditLot + "-max_driver_slide_outs"} defaultValue={lotInfo[activeEditLot]?.max_driver_slide_outs || "Any"}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_driver_slide_outs:e.target.value}}))}
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
-                          <option value="Any">Any</option>
-                          <option value="0">0</option>
-                          <option value="1">1</option>
-                          <option value="2">2</option>
-                          <option value="3">3</option>
-                          <option value="4+">4+</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Max Passenger Side Slide-Outs</label>
-                        <select key={activeEditLot + "-max_passenger_slide_outs"} defaultValue={lotInfo[activeEditLot]?.max_passenger_slide_outs || "Any"}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_passenger_slide_outs:e.target.value}}))}
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }}>
-                          <option value="Any">Any</option>
-                          <option value="0">0</option>
-                          <option value="1">1</option>
-                          <option value="2">2</option>
-                          <option value="3">3</option>
-                          <option value="4+">4+</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Daily Price ($)</label>
-                        <input type="number" key={activeEditLot + "-price_daily"} defaultValue={lotInfo[activeEditLot]?.price_daily || 45}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_daily:parseFloat(e.target.value)}}))}
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Base Price ($)</label>
-                        <input type="number" key={activeEditLot + "-base_price"} defaultValue={lotInfo[activeEditLot]?.base_price || ""}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], base_price:parseFloat(e.target.value)}}))}
-                          placeholder="year-round flat rate"
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>High Season ($/mo)</label>
-                        <input type="number" key={activeEditLot + "-high_season_price"} defaultValue={lotInfo[activeEditLot]?.high_season_price || ""}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], high_season_price:parseFloat(e.target.value)}}))}
-                          placeholder="optional"
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Low Season ($/mo)</label>
-                        <input type="number" key={activeEditLot + "-low_season_price"} defaultValue={lotInfo[activeEditLot]?.low_season_price || ""}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], low_season_price:parseFloat(e.target.value)}}))}
-                          placeholder="optional"
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Weekly Price ($)</label>
-                        <input type="number" key={activeEditLot + "-price_weekly"} defaultValue={lotInfo[activeEditLot]?.price_weekly || ""}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_weekly:parseFloat(e.target.value)}}))}
-                          placeholder="optional"
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize:11, color:"#6b7280",display:"block", marginBottom:3 }}>Yearly Price ($)</label>
-                        <input type="number" key={activeEditLot + "-price_yearly"} defaultValue={lotInfo[activeEditLot]?.price_yearly || ""}
-                          onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_yearly:parseFloat(e.target.value)}}))}
-                          placeholder="optional"
-                          style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box" }} />
-                      </div>
+                  <div className="ed-grid">
+                    <div>
+                      <label className="ed-label">Max RV length (ft)</label>
+                      <input type="number" className="ed-input" key={activeEditLot + "-max_length_ft"} defaultValue={lotInfo[activeEditLot]?.max_length_ft || lotInfo[activeEditLot]?.max_length || 45}
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_length_ft:parseInt(e.target.value)}}))} />
                     </div>
-                    <div style={{ marginTop:8 }}>
-                      <label style={{ fontSize:11, color:"#6b7280", display:"block", marginBottom:3 }}>Description</label>
-                      <textarea key={activeEditLot + "-description"} defaultValue={lotInfo[activeEditLot]?.description || ""}
+                    <div>
+                      {/* Aug 20 (per Mely — "no veo width no lo veo ahi?"):
+                          max_width_ft was already read/validated in the
+                          apply form (rvTooWide) and shown as plain info
+                          everywhere else, but this admin editor never had
+                          an input for it — meaning no lot could ever
+                          actually have a real value, so that validation
+                          could never fire in practice. Mirrors Max RV
+                          Length exactly. */}
+                      <label className="ed-label">Max RV width (ft) — slide-outs extended</label>
+                      <input type="number" className="ed-input" key={activeEditLot + "-max_width_ft"} defaultValue={lotInfo[activeEditLot]?.max_width_ft || ""}
+                        placeholder="e.g. 14"
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_width_ft:e.target.value ? parseInt(e.target.value) : null}}))} />
+                    </div>
+                    <div>
+                      <label className="ed-label">Amperage</label>
+                      <select className="ed-input" key={activeEditLot + "-amp_service"} defaultValue={lotInfo[activeEditLot]?.amp_service || String(lotInfo[activeEditLot]?.amperage || 50)}
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], amp_service:e.target.value}}))}>
+                        <option value="30">30 Amp</option>
+                        <option value="50">50 Amp</option>
+                        <option value="30/50">30/50 Amp</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="ed-label">Max driver side slide-outs</label>
+                      <select className="ed-input" key={activeEditLot + "-max_driver_slide_outs"} defaultValue={lotInfo[activeEditLot]?.max_driver_slide_outs || "Any"}
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_driver_slide_outs:e.target.value}}))}>
+                        <option value="Any">Any</option>
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4+">4+</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="ed-label">Max passenger side slide-outs</label>
+                      <select className="ed-input" key={activeEditLot + "-max_passenger_slide_outs"} defaultValue={lotInfo[activeEditLot]?.max_passenger_slide_outs || "Any"}
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], max_passenger_slide_outs:e.target.value}}))}>
+                        <option value="Any">Any</option>
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4+">4+</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="ed-label">Daily price ($)</label>
+                      <input type="number" className="ed-input" key={activeEditLot + "-price_daily"} defaultValue={lotInfo[activeEditLot]?.price_daily || 45}
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_daily:parseFloat(e.target.value)}}))} />
+                    </div>
+                    <div>
+                      <label className="ed-label">Base price ($)</label>
+                      <input type="number" className="ed-input" key={activeEditLot + "-base_price"} defaultValue={lotInfo[activeEditLot]?.base_price || ""}
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], base_price:parseFloat(e.target.value)}}))}
+                        placeholder="year-round flat rate" />
+                    </div>
+                    <div>
+                      <label className="ed-label">High season ($/mo)</label>
+                      <input type="number" className="ed-input" key={activeEditLot + "-high_season_price"} defaultValue={lotInfo[activeEditLot]?.high_season_price || ""}
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], high_season_price:parseFloat(e.target.value)}}))}
+                        placeholder="optional" />
+                    </div>
+                    <div>
+                      <label className="ed-label">Low season ($/mo)</label>
+                      <input type="number" className="ed-input" key={activeEditLot + "-low_season_price"} defaultValue={lotInfo[activeEditLot]?.low_season_price || ""}
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], low_season_price:parseFloat(e.target.value)}}))}
+                        placeholder="optional" />
+                    </div>
+                    <div>
+                      <label className="ed-label">Weekly price ($)</label>
+                      <input type="number" className="ed-input" key={activeEditLot + "-price_weekly"} defaultValue={lotInfo[activeEditLot]?.price_weekly || ""}
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_weekly:parseFloat(e.target.value)}}))}
+                        placeholder="optional" />
+                    </div>
+                    <div>
+                      <label className="ed-label">Yearly price ($)</label>
+                      <input type="number" className="ed-input" key={activeEditLot + "-price_yearly"} defaultValue={lotInfo[activeEditLot]?.price_yearly || ""}
+                        onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], price_yearly:parseFloat(e.target.value)}}))}
+                        placeholder="optional" />
+                    </div>
+                    <div className="ed-span">
+                      <label className="ed-label">Description</label>
+                      <textarea className="ed-input" key={activeEditLot + "-description"} defaultValue={lotInfo[activeEditLot]?.description || ""}
                         onChange={e=>setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], description:e.target.value}}))}
-                        placeholder="e.g. Corner lot, extra space, near pool..."
-                        style={{ width:"100%", padding:"6px 8px", border:"1px solid #d1d5db", borderRadius:6, fontSize:13, boxSizing:"border-box", resize:"vertical", minHeight:60 }} />
+                        placeholder="e.g. Corner lot, extra space, near pool..." />
                     </div>
-                    <div style={{ marginTop:8 }}>
-                      <label style={{ fontSize:11, color:"#6b7280", display:"block", marginBottom:3 }}>Photo (Optional)</label>
+                    <div className="ed-span">
+                      <label className="ed-label">Photo (optional)</label>
                       {lotInfo[activeEditLot]?.photo_url && (
-                        <div style={{ marginBottom:6, position:"relative", display:"inline-block" }}>
-                          <img src={lotInfo[activeEditLot].photo_url} alt="Lot" style={{ maxWidth:"100%", maxHeight:120, borderRadius:6, display:"block" }} />
-                          <button type="button" onClick={async ()=>{
+                        <div style={{ marginBottom:8, position:"relative", display:"inline-block" }}>
+                          <img src={lotInfo[activeEditLot].photo_url} alt="Lot" style={{ maxWidth:"100%", maxHeight:120, borderRadius:8, display:"block", border:"1px solid #e5e7eb" }} />
+                          <button type="button" aria-label="Remove photo" onClick={async ()=>{
                             setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], photo_url:null}}));
                             await fetch('/api/set-lot-pricing', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ parkId: PARK_ID, lotName: activeEditLot, photoUrl: null, token: editToken }),
                             });
-                          }} style={{ position:"absolute", top:4, right:4, background:"#dc2626", color:"#fff", border:"none", borderRadius:6, width:22, height:22, cursor:"pointer", fontSize:12, lineHeight:"22px", padding:0 }}>
-                            ×
+                          }} className="ed-btn ed-btn-secondary ed-btn-icon" style={{ position:"absolute", top:6, right:6, width:26, height:26, color:"#b91c1c" }}>
+                            <EdIcon name="x" size={13} />
                           </button>
                         </div>
                       )}
-                      <input type="file" accept="image/*" disabled={uploadingPhoto}
-                        onChange={async (e)=>{
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setPhotoUploadError("");
-                          setUploadingPhoto(true);
-                          try {
-                            const imageBase64 = await new Promise((resolve, reject) => {
-                              const reader = new FileReader();
-                              reader.onload = () => resolve(reader.result);
-                              reader.onerror = reject;
-                              reader.readAsDataURL(file);
-                            });
-                            const res = await fetch('/api/upload-lot-photo', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ parkId: PARK_ID, lotName: activeEditLot, imageBase64, fileName: file.name, token: editToken }),
-                            });
-                            const result = await res.json();
-                            if (!res.ok) throw new Error(result.error || 'Upload failed');
-                            setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], photo_url: result.photoUrl}}));
-                          } catch (err) {
-                            setPhotoUploadError(err.message || 'Upload failed');
-                          }
-                          setUploadingPhoto(false);
-                          e.target.value = "";
-                        }}
-                        style={{ fontSize:12 }} />
-                      {uploadingPhoto && <p style={{ fontSize:11, color:"#6b7280", marginTop:4 }}>Uploading...</p>}
-                      {photoUploadError && <p style={{ fontSize:11, color:"#dc2626", marginTop:4 }}>{photoUploadError}</p>}
-                      <p style={{ fontSize:10, color:"#9ca3af", marginTop:4 }}>If no photo is added, guests just see the info above — no image is shown.</p>
+                      <div>
+                        <input type="file" className="ed-file" accept="image/*" disabled={uploadingPhoto}
+                          onChange={async (e)=>{
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setPhotoUploadError("");
+                            setUploadingPhoto(true);
+                            try {
+                              const imageBase64 = await new Promise((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onload = () => resolve(reader.result);
+                                reader.onerror = reject;
+                                reader.readAsDataURL(file);
+                              });
+                              const res = await fetch('/api/upload-lot-photo', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ parkId: PARK_ID, lotName: activeEditLot, imageBase64, fileName: file.name, token: editToken }),
+                              });
+                              const result = await res.json();
+                              if (!res.ok) throw new Error(result.error || 'Upload failed');
+                              setLotInfo(prev=>({...prev,[activeEditLot]:{...prev[activeEditLot], photo_url: result.photoUrl}}));
+                            } catch (err) {
+                              setPhotoUploadError(err.message || 'Upload failed');
+                            }
+                            setUploadingPhoto(false);
+                            e.target.value = "";
+                          }} />
+                      </div>
+                      {uploadingPhoto && <p className="ed-note" style={{ color:"#6b7280" }}>Uploading...</p>}
+                      {photoUploadError && <p className="ed-note" style={{ color:"#dc2626" }}>{photoUploadError}</p>}
+                      <p className="ed-note">If no photo is added, guests just see the info above — no image is shown.</p>
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
+
               {isAdmin && (
-                <div style={{ background:"#f9fafb", borderRadius:8, padding:10, marginBottom:10 }}>
-                  <div style={{ fontSize:12, color:"#6b7280", marginBottom:4 }}>Coordinates:</div>
-                  <pre style={{ margin:0, fontSize:12, color:"#14532d", fontFamily:"monospace", userSelect:"all" }}>
-                    {activeEditLot + ": [" + draftLots[activeEditLot].map(n=>n.toFixed(1)).join(", ") + "],"}
-                  </pre>
+                <div className="ed-section">
+                  <div className="ed-card">
+                    <div className="ed-label" style={{ marginBottom:4 }}>Coordinates</div>
+                    <pre className="ed-code">
+                      {activeEditLot + ": [" + draftLots[activeEditLot].map(n=>n.toFixed(1)).join(", ") + "],"}
+                    </pre>
+                  </div>
                 </div>
               )}
             </>
           )}
 
+          {(isAdmin || isRestrictedEditor) && (
+          <div className="ed-footer">
           {isAdmin && (
-          <button onClick={async ()=>{
+          <button type="button" className="ed-btn ed-btn-primary ed-btn-block" style={{ height:40, fontSize:14 }} onClick={async ()=>{
             try {
               await saveActiveLotInfo(activeEditLot, lotInfo, editToken);
               // Guardar emojis y shapes en Supabase
@@ -2965,13 +3154,13 @@ export default function AlohaMap() {
             } catch(e) {
               setSaveResult({ ok:false, message:e.message });
             }
-          }} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"10px 20px", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:600, width:"100%" }}>
-            💾 Save All Changes
+          }}>
+            <EdIcon name="save" /> Save All Changes
           </button>
           )}
 
           {isRestrictedEditor && (
-          <button onClick={async ()=>{
+          <button type="button" className="ed-btn ed-btn-primary ed-btn-block" style={{ height:40, fontSize:14 }} onClick={async ()=>{
             try {
               await saveActiveLotInfo(activeEditLot, lotInfo, editToken);
               await saveToSupabase('emojis', 'all', emojis, editToken);
@@ -2980,9 +3169,11 @@ export default function AlohaMap() {
             } catch(e) {
               alert("⚠️ Error: " + e.message);
             }
-          }} style={{ background:"#16a34a", color:"#fff", border:"none", padding:"10px 20px", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:600, width:"100%" }}>
-            💾 Save Changes
+          }}>
+            <EdIcon name="save" /> Save Changes
           </button>
+          )}
+          </div>
           )}
         </div>
       )}
