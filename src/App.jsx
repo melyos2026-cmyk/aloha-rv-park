@@ -2759,13 +2759,13 @@ export default function AlohaMap() {
           {/* Oct 30 (per Mely): it wasn't clear that a lot's details open by tapping the lot. */}
           {canEditMap && !activeEditLot && (
             <div className="ed-section" style={{ display:"flex", gap:12, alignItems:"flex-start", background:"#f0fdf4", borderColor:"#bbf7d0" }}>
-              <span aria-hidden style={{ fontSize:18, lineHeight:"22px" }}>👆</span>
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#14532d" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0, marginTop:1 }}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
               <div>
                 <div style={{ fontWeight:700, color:"#14532d", fontSize:14 }}>Tap any lot on the map to edit it</div>
                 <div style={{ color:"#4b5563", fontSize:13, marginTop:2, lineHeight:1.5 }}>
                   {isAdmin
                     ? <>Its menu opens below: status, color, shape, size, power, slide-outs, description and photo. Drag a lot to move it, or drag its corner to resize it. </>
-                    : <>Its menu opens below: status, color, size, power, slide-outs, description and photo. Lot positions and sizes on the map are set by MelyOS. </>}
+                    : <>Its menu opens below: status, color, size, power, slide-outs, description and photo. </>}
                   To fill many lots at once, use <b>Edit all lot details</b> at the top of Map Builder.
                 </div>
               </div>
