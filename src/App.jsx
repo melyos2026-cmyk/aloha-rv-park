@@ -1493,6 +1493,9 @@ export default function AlohaMap() {
   const [reservedDates, setReservedDates] = useState({});
   const [hover, setHover] = useState(null);
   const [selected, setSelected] = useState(null);
+  // Oct 31 (per Mely — every park with a map): show that the map is interactive — a "Tap any lot" pill,
+  // a tapping hand on one open lot and open lots glowing softly — until the visitor touches the map.
+  const [mapTouched, setMapTouched] = useState(false);
   // Oct 22 (per Mely): Expedia-style date search above the map.
   const [lotSearch, setLotSearch] = useState(null);
   const searchFree = lotSearch ? new Set((lotSearch.results || []).map((r) => r.lot)) : null;
@@ -2079,6 +2082,8 @@ export default function AlohaMap() {
     );
   };
 
+  // Oct 31 (per Mely — every park with a map): only for visitors (never in edit mode), until the first touch.
+  const showTapHint = !mapTouched && !editMode && !selected;
   return (
     <div style={{
       minHeight: !isFixedFrame ? "100vh" : undefined,
@@ -2224,8 +2229,15 @@ export default function AlohaMap() {
             }
           } : undefined}
           onMouseLeave={editMode ? () => { setDragging(null); setDraggingEmoji(null); } : undefined}
+          onPointerDown={() => { if (!mapTouched) setMapTouched(true); }}
         >
-          <style>{`.map-loading{opacity:0 !important;} .map-loading > *{pointer-events:none !important;} .map-ready{transition:opacity .2s ease;}`}</style>
+          <style>{`.map-loading{opacity:0 !important;} .map-loading > *{pointer-events:none !important;} .map-ready{transition:opacity .2s ease;}
+            @keyframes lotBreathe{0%,100%{filter:brightness(1);box-shadow:0 0 0 0 rgba(93,255,168,0)}50%{filter:brightness(1.25);box-shadow:0 0 10px 2px rgba(93,255,168,.85)}}
+            @keyframes tapRing{0%{transform:scale(.4);opacity:1}100%{transform:scale(1.6);opacity:0}}
+            @keyframes tapHand{0%,100%{transform:translate(0,0) scale(1)}45%{transform:translate(-2px,-3px) scale(.92)}}
+            @keyframes tapDot{0%{box-shadow:0 0 0 0 rgba(93,255,168,.7)}100%{box-shadow:0 0 0 9px rgba(93,255,168,0)}}
+            @keyframes tapIn{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
+            @media (prefers-reduced-motion: reduce){.tap-anim{animation:none !important}}`}</style>
           <img
             ref={mapImgRef}
             onLoad={() => setImgReady(true)}
@@ -2366,7 +2378,9 @@ export default function AlohaMap() {
                   zIndex: isHov ? 20 : 1,
                   transform: `rotate(${rotations[lot] || 0}deg)`,
                   boxSizing:"border-box",
+                  animation: showTapHint && !searchFree && status === "available" && !lot.startsWith("S") ? "lotBreathe 1.8s ease-in-out infinite" : undefined,
                 }}
+                className={showTapHint ? "tap-anim" : undefined}
               >
                 {isNarrowMap ? narrowLotLabel(lot, pw, ph) : storageNA ? (
                 <span style={{ display:"flex", flexDirection:"column", alignItems:"center", color:"#fff", textShadow:"0 1px 3px rgba(0,0,0,0.8)", lineHeight:1.05, pointerEvents:"none", textAlign:"center" }}>
@@ -2381,6 +2395,26 @@ export default function AlohaMap() {
               </div>
             );
           })}
+          {showTapHint && (() => {
+            const first = Object.entries(draftLots).find(([lot]) => !lot.startsWith("S") && (statuses[lot] || "available") === "available");
+            return (
+              <>
+                <div className="tap-anim" aria-hidden style={{ position:"absolute", top:10, left:"50%", transform:"translateX(-50%)", zIndex:60, display:"inline-flex", alignItems:"center", gap:7, whiteSpace:"nowrap", background:"rgba(15,37,64,.88)", color:"#fff", fontSize:"clamp(11px,1.2vw,13px)", padding:"7px 13px", borderRadius:999, boxShadow:"0 6px 18px -6px rgba(0,0,0,.6)", pointerEvents:"none", animation:"tapIn .5s ease-out both" }}>
+                  <span className="tap-anim" style={{ width:8, height:8, borderRadius:999, background:"#5dffa8", animation:"tapDot 1.6s ease-out infinite" }} />
+                  <b>Interactive map</b>&nbsp;· Tap any green lot for size, power &amp; prices
+                </div>
+                {first && (() => {
+                  const [, [x, y, w, h]] = first;
+                  return (
+                    <span aria-hidden style={{ position:"absolute", left:`${x + w / 2}%`, top:`${y + h / 2}%`, width:0, height:0, zIndex:61, pointerEvents:"none" }}>
+                      <span className="tap-anim" style={{ position:"absolute", left:-16, top:-16, width:32, height:32, borderRadius:999, border:"2px solid #5dffa8", animation:"tapRing 1.6s ease-out infinite" }} />
+                      <svg className="tap-anim" viewBox="0 0 24 24" width="30" height="30" style={{ position:"absolute", left:-4, top:2, filter:"drop-shadow(0 2px 3px rgba(0,0,0,.5))", animation:"tapHand 1.6s ease-in-out infinite" }}><path fill="#fff" stroke="#0f2540" strokeWidth="1.3" strokeLinejoin="round" d="M9 11V4.8a1.6 1.6 0 0 1 3.2 0V10l.6-.1V8.3a1.6 1.6 0 0 1 3.2 0v1.9l.5-.1a1.6 1.6 0 0 1 3 .8v4.6c0 3.6-2.6 6.5-6.2 6.5h-1.1c-1.9 0-3.6-.9-4.7-2.5l-3-4.4a1.6 1.6 0 0 1 2.5-2l2 1.9Z"/></svg>
+                    </span>
+                  );
+                })()}
+              </>
+            );
+          })()}
           {/* Texts */}
           {texts.map((item) => {
             const textSize = item.size * scaleFactor;
