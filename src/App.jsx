@@ -514,6 +514,12 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
   const hasWeekly = !!lotInfo?.price_weekly;
   const hasValidDates = form.arrival && form.departure && new Date(form.departure) > new Date(form.arrival);
   const hasOverlap = hasValidDates && rangeOverlaps(form.arrival, form.departure);
+  // Nov 20 (per Mely): inside MelyOS Explore, tell the request form next to the map which lot is open and
+  // whether it's free for the chosen dates.
+  useEffect(() => {
+    if (window.parent === window) return;
+    try { window.parent.postMessage({ source: "melyos-map", type: "melyos-lot", lot, status, arrive: form.arrival || "", depart: form.departure || "", available: hasValidDates ? !hasOverlap : null }, "*"); } catch {}
+  }, [lot, status, form.arrival, form.departure, hasValidDates, hasOverlap]);
   const stay = hasValidDates && !hasOverlap ? calcStayPreview(form.arrival, form.departure, hasWeekly) : null;
 
   const rvLengthNum = Number(form.rvLength) || 0;
@@ -1503,6 +1509,31 @@ export default function AlohaMap() {
     arrival: lotSearch.arrival, departure: lotSearch.departure, rvLength: lotSearch.rvLength || "",
     slideOutDriverCount: lotSearch.driverSlideOuts || "", slideOutPassengerCount: lotSearch.passengerSlideOuts || "",
   } : null;
+  // Nov 20 (per Mely — MelyOS Explore listing page): the request form next to this map sends its dates
+  // ("melyos-dates"); we run the same date search as the search bar (free lots glow, others fade) and answer
+  // with how many lots are free ("melyos-avail"). Only plain dates come in; nothing private goes out.
+  useEffect(() => {
+    if (window.parent === window) return;
+    const tell = (m) => { try { window.parent.postMessage({ source: "melyos-map", ...m }, "*"); } catch {} };
+    const ok = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+    let seq = 0;
+    const on = async (e) => {
+      const m = e.data || {};
+      if (m.type !== "melyos-dates") return;
+      const arrival = ok(m.arrive), departure = ok(m.depart), my = ++seq;
+      if (!arrival || !departure || departure <= arrival) { setLotSearch(null); tell({ type: "melyos-avail", available: null }); return; }
+      try {
+        const r = await fetch("/api/lot-data?" + new URLSearchParams({ type: "search", park_id: PARK_ID, arrival, departure }).toString());
+        const data = await r.json();
+        if (my !== seq || !r.ok) return;
+        setLotSearch({ ...data, arrival, departure, rvLength: "", driverSlideOuts: "", passengerSlideOuts: "" });
+        tell({ type: "melyos-avail", available: (data.results || []).length, arrive: arrival, depart: departure });
+      } catch {}
+    };
+    window.addEventListener("message", on);
+    tell({ type: "melyos-ready" });
+    return () => window.removeEventListener("message", on);
+  }, []);
   const [selectedStorageLot, setSelectedStorageLot] = useState(null);
   const [payLotSelected, setPayLotSelected] = useState(null);
   const [confirmed, setConfirmed] = useState(null);
