@@ -1532,7 +1532,7 @@ export default function AlohaMap() {
         const lot = typeof m.lot === "string" && /^[A-Za-z0-9-]{1,10}$/.test(m.lot) ? m.lot : "";
         const arrival = ok(m.arrive), departure = ok(m.depart);
         const len = Number(m.length) > 0 && Number(m.length) < 100 ? String(Math.round(Number(m.length))) : "";
-        if (lot) { setExplorePick(lot); setSelected({ lot, status: "available", prefill: { arrival, departure, rvLength: len } }); }
+        if (lot) { const so = (v) => (/^(\d|\d\+)$/.test(String(v || "")) ? String(v) : ""); setExplorePick(lot); setSelected({ lot, status: "available", prefill: { arrival, departure, rvLength: len, slideOutDriverCount: so(m.driverSlideOuts), slideOutPassengerCount: so(m.passengerSlideOuts) } }); }
         return;
       }
       if (m.type === "melyos-pick") { const lot = typeof m.lot === "string" && /^[A-Za-z0-9-]{1,10}$/.test(m.lot) ? m.lot : ""; setExplorePick(lot); if (lot) setSelected({ lot, status: "available" }); return; }
@@ -1545,11 +1545,16 @@ export default function AlohaMap() {
         const amp = (String(m.power || "").match(/\d+/) || [""])[0];
         const q = new URLSearchParams({ type: "search", park_id: PARK_ID, arrival, departure });
         if (len) q.set("rv_length", len);
+        // Nov 20 (per Mely — same search as this map's own bar): slide-outs per side
+        const so = (v) => (/^(\d|\d\+)$/.test(String(v || "")) ? String(v) : "");
+        const dso = so(m.driverSlideOuts), pso = so(m.passengerSlideOuts);
+        if (dso) q.set("driver_slide_outs", dso);
+        if (pso) q.set("passenger_slide_outs", pso);
         const r = await fetch("/api/lot-data?" + q.toString());
         const data = await r.json();
         if (my !== seq || !r.ok) return;
         if (amp && Array.isArray(data.results)) data.results = data.results.filter((x) => !x.amp_service || String(x.amp_service).includes(amp) || (amp === "30" && String(x.amp_service).includes("50")));
-        setLotSearch({ ...data, arrival, departure, rvLength: len, driverSlideOuts: "", passengerSlideOuts: "" });
+        setLotSearch({ ...data, arrival, departure, rvLength: len, driverSlideOuts: dso, passengerSlideOuts: pso });
         tell({ type: "melyos-avail", available: (data.results || []).length, lots: (data.results || []).map((x) => ({ lot: x.lot, maxLen: Number(x.max_length_ft) || null })), arrive: arrival, depart: departure });
       } catch {}
     };
