@@ -1525,10 +1525,16 @@ export default function AlohaMap() {
       const arrival = ok(m.arrive), departure = ok(m.depart), my = ++seq;
       if (!arrival || !departure || departure <= arrival) { setLotSearch(null); tell({ type: "melyos-avail", available: null }); return; }
       try {
-        const r = await fetch("/api/lot-data?" + new URLSearchParams({ type: "search", park_id: PARK_ID, arrival, departure }).toString());
+        // Nov 20 (per Mely): the Explore form's RV length and power narrow it too — only lots that really fit show.
+        const len = Number(m.length) > 0 && Number(m.length) < 100 ? String(Math.round(Number(m.length))) : "";
+        const amp = (String(m.power || "").match(/\d+/) || [""])[0];
+        const q = new URLSearchParams({ type: "search", park_id: PARK_ID, arrival, departure });
+        if (len) q.set("rv_length", len);
+        const r = await fetch("/api/lot-data?" + q.toString());
         const data = await r.json();
         if (my !== seq || !r.ok) return;
-        setLotSearch({ ...data, arrival, departure, rvLength: "", driverSlideOuts: "", passengerSlideOuts: "" });
+        if (amp && Array.isArray(data.results)) data.results = data.results.filter((x) => !x.amp_service || String(x.amp_service).includes(amp) || (amp === "30" && String(x.amp_service).includes("50")));
+        setLotSearch({ ...data, arrival, departure, rvLength: len, driverSlideOuts: "", passengerSlideOuts: "" });
         tell({ type: "melyos-avail", available: (data.results || []).length, arrive: arrival, depart: departure });
       } catch {}
     };
