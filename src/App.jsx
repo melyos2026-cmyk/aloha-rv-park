@@ -1498,6 +1498,8 @@ export default function AlohaMap() {
   const [storageNotAvailable, setStorageNotAvailable] = useState(() => (MAP_CACHE && MAP_CACHE.storageNotAvailable) || {});
   const [reservedDates, setReservedDates] = useState({});
   const [hover, setHover] = useState(null);
+  // Nov 20 (per Mely — "que me enseñe los previews" like the marina map): a photo preview card follows the mouse over a lot.
+  const [hoverPos, setHoverPos] = useState(null);
   const [selected, setSelected] = useState(null);
   // Oct 31 (per Mely — every park with a map): show that the map is interactive — a "Tap any lot" pill,
   // a tapping hand on one open lot and open lots glowing softly — until the visitor touches the map.
@@ -2283,6 +2285,52 @@ export default function AlohaMap() {
           {editMode && snapLines.y !== null && (
             <div style={{ position:"absolute", top:snapLines.y, left:0, height:1, width:"100%", background:"#f59e0b", zIndex:1000, pointerEvents:"none" }} />
           )}
+          {/* Nov 20 (per Mely): hover preview card — photo, status, price, power — no click needed */}
+          {!editMode && !selected && hover && hoverPos && typeof window !== "undefined" && (() => {
+            const st = statuses[hover] || "available";
+            const isStorage = hover.startsWith("S");
+            const info = lotInfo[hover] || {};
+            const photo = isStorage ? null : lotPhoto(info.photo_url);
+            const label = isStorage && storageNotAvailable[hover] ? "Not available" : st.replace(/_/g, " ");
+            const color = isStorage && storageNotAvailable[hover] ? NOT_AVAILABLE_SOLID : (STATUS_SOLID[st] || "#16a34a");
+            // Only what the park filled in for this lot (Lot Info) — nothing invented.
+            const money = (v) => `$${Number(v).toLocaleString()}`;
+            const prices = [info.price_monthly ? `${money(info.price_monthly)} / month` : null, info.price_weekly ? `${money(info.price_weekly)} / week` : null, info.price_daily ? `${money(info.price_daily)} / night` : null].filter(Boolean);
+            const kind = info.lot_type ? String(info.lot_type).replace(/_/g, " ") : null;
+            const amps = info.amp_service || info.amperage;
+            const extra = [amps ? `${amps} amp` : null, info.max_length_ft ? `Max RV ${info.max_length_ft} ft` : null, info.size ? String(info.size) : null,
+              info.max_driver_slide_outs && info.max_driver_slide_outs !== "Any" ? `Driver slide-outs: ${info.max_driver_slide_outs}` : null,
+              info.max_passenger_slide_outs && info.max_passenger_slide_outs !== "Any" ? `Passenger slide-outs: ${info.max_passenger_slide_outs}` : null].filter(Boolean);
+            const desc = info.description ? String(info.description).slice(0, 140) + (String(info.description).length > 140 ? "…" : "") : null;
+            const W = 250, H = (photo ? 130 : 0) + 110 + (desc ? 50 : 0) + (prices.length > 1 ? 20 : 0);
+            // Beside the cursor (right, else left); if neither fits, centered above/below — never over the lot, never cut off.
+            const VW = window.innerWidth, VH = window.innerHeight, cx = hoverPos.x, cy = hoverPos.y, g = 18;
+            let x, y;
+            if (cx + g + W <= VW - 8) { x = cx + g; y = cy - H / 2; }
+            else if (cx - g - W >= 8) { x = cx - g - W; y = cy - H / 2; }
+            else { x = cx - W / 2; y = cy + g + H <= VH - 8 ? cy + g : cy - g - H; }
+            x = Math.max(8, Math.min(VW - W - 8, x)); y = Math.max(8, Math.min(VH - H - 8, y));
+            return (
+              createPortal(<div style={{ position:"fixed", left: x, top: Math.max(8, y), width: W, zIndex: 3000, background:"#fff", borderRadius:12, boxShadow:"0 10px 28px rgba(15,37,64,.3)", overflow:"hidden", pointerEvents:"none", fontFamily:"Inter, system-ui, sans-serif", color:"#0f2540" }}>
+                {photo && <img src={photo} alt="" style={{ display:"block", width:"100%", height:130, objectFit:"cover" }} />}
+                <div style={{ padding:"8px 10px" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    <b style={{ fontSize:14 }}>{isStorage ? "Storage" : "Lot"} {hover}</b>
+                    <span style={{ background: color, color:"#fff", borderRadius:999, padding:"1px 8px", fontSize:11, fontWeight:700, textTransform:"capitalize" }}>{label}</span>
+                  </div>
+                  {kind && <div style={{ fontSize:12, color:"#0f2540", fontWeight:600, marginTop:3, textTransform:"capitalize" }}>{kind}</div>}
+                  {prices.length > 0 && <div style={{ fontSize:13, color:"#475569", marginTop:2 }}>{prices.join(" · ")}</div>}
+                  {extra.length > 0 && (
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
+                      {extra.map(t => <span key={t} style={{ background:"#eef4fb", borderRadius:999, padding:"1px 7px", fontSize:11 }}>{t}</span>)}
+                    </div>
+                  )}
+                  {desc && <div style={{ fontSize:12, color:"#475569", marginTop:6, lineHeight:1.35 }}>{desc}</div>}
+                  <div style={{ fontSize:11, color:"#0e7a8c", fontWeight:600, marginTop:6 }}>Click for dates & details</div>
+                </div>
+              </div>, document.body)
+            );
+          })()}
           {/* Lot overlays */}
           {Object.entries(draftLots).map(([lot, [x, y, w, h]]) => {
             const status = statuses[lot] || "available";
@@ -2387,9 +2435,10 @@ export default function AlohaMap() {
                     setSelected({ lot, status, prefill: searchPrefill });
                   }
                 }}
-                onMouseEnter={() => setHover(lot)}
-                onMouseLeave={() => setHover(null)}
-                title={storageNA ? `Storage ${lot} • Not available` : `Lot ${lot} • ${status}`}
+                onMouseEnter={(e) => { setHover(lot); if (!editMode) setHoverPos({ x: e.clientX, y: e.clientY }); }}
+                onMouseMove={(e) => { if (!editMode) setHoverPos({ x: e.clientX, y: e.clientY }); }}
+                onMouseLeave={() => { setHover(null); setHoverPos(null); }}
+                title={editMode ? (storageNA ? `Storage ${lot} • Not available` : `Lot ${lot} • ${status}`) : undefined}
                 style={{
                   position:"absolute",
                   left:`${x}%`, top:`${y}%`,
