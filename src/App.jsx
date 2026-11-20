@@ -518,7 +518,7 @@ function BookingModal({ lot, status, lotInfo, parkSettings, reservedUntil, requi
   // whether it's free for the chosen dates.
   useEffect(() => {
     if (window.parent === window) return;
-    try { window.parent.postMessage({ source: "melyos-map", type: "melyos-lot", lot, status, arrive: form.arrival || "", depart: form.departure || "", available: hasValidDates ? !hasOverlap : null }, "*"); } catch {}
+    try { window.parent.postMessage({ source: "melyos-map", type: "melyos-lot", lot, status, arrive: form.arrival || "", depart: form.departure || "", available: hasValidDates ? !hasOverlap : null, maxLen: Number(lotInfo?.max_length_ft) || null }, "*"); } catch {}
   }, [lot, status, form.arrival, form.departure, hasValidDates, hasOverlap]);
   const stay = hasValidDates && !hasOverlap ? calcStayPreview(form.arrival, form.departure, hasWeekly) : null;
 
@@ -1550,7 +1550,7 @@ export default function AlohaMap() {
         if (my !== seq || !r.ok) return;
         if (amp && Array.isArray(data.results)) data.results = data.results.filter((x) => !x.amp_service || String(x.amp_service).includes(amp) || (amp === "30" && String(x.amp_service).includes("50")));
         setLotSearch({ ...data, arrival, departure, rvLength: len, driverSlideOuts: "", passengerSlideOuts: "" });
-        tell({ type: "melyos-avail", available: (data.results || []).length, lots: (data.results || []).map((x) => ({ lot: x.lot })), arrive: arrival, depart: departure });
+        tell({ type: "melyos-avail", available: (data.results || []).length, lots: (data.results || []).map((x) => ({ lot: x.lot, maxLen: Number(x.max_length_ft) || null })), arrive: arrival, depart: departure });
       } catch {}
     };
     window.addEventListener("message", on);
