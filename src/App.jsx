@@ -1521,6 +1521,8 @@ export default function AlohaMap() {
     let seq = 0;
     const on = async (e) => {
       const m = e.data || {};
+      // Nov 20 (per Mely): a lot picked in the Explore form's "Lot" list opens that lot here
+      if (m.type === "melyos-pick" && typeof m.lot === "string" && /^[A-Za-z0-9-]{1,10}$/.test(m.lot)) { setSelected({ lot: m.lot, status: "available" }); return; }
       if (m.type !== "melyos-dates") return;
       const arrival = ok(m.arrive), departure = ok(m.depart), my = ++seq;
       if (!arrival || !departure || departure <= arrival) { setLotSearch(null); tell({ type: "melyos-avail", available: null }); return; }
@@ -1535,7 +1537,7 @@ export default function AlohaMap() {
         if (my !== seq || !r.ok) return;
         if (amp && Array.isArray(data.results)) data.results = data.results.filter((x) => !x.amp_service || String(x.amp_service).includes(amp) || (amp === "30" && String(x.amp_service).includes("50")));
         setLotSearch({ ...data, arrival, departure, rvLength: len, driverSlideOuts: "", passengerSlideOuts: "" });
-        tell({ type: "melyos-avail", available: (data.results || []).length, arrive: arrival, depart: departure });
+        tell({ type: "melyos-avail", available: (data.results || []).length, lots: (data.results || []).map((x) => ({ lot: x.lot })), arrive: arrival, depart: departure });
       } catch {}
     };
     window.addEventListener("message", on);
