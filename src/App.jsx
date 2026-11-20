@@ -1525,6 +1525,16 @@ export default function AlohaMap() {
     const on = async (e) => {
       const m = e.data || {};
       // Nov 20 (per Mely): a lot picked in the Explore form's "Lot" list opens that lot here
+      // Nov 20 (per Mely — Explore is online sales, not requests): "Book & pay" in the Explore form opens this lot's
+      // real booking window with the dates filled in; it charges through the park's own checkout, and stays longer than
+      // the park's application limit go to Apply (the booking window already handles both).
+      if (m.type === "melyos-book") {
+        const lot = typeof m.lot === "string" && /^[A-Za-z0-9-]{1,10}$/.test(m.lot) ? m.lot : "";
+        const arrival = ok(m.arrive), departure = ok(m.depart);
+        const len = Number(m.length) > 0 && Number(m.length) < 100 ? String(Math.round(Number(m.length))) : "";
+        if (lot) { setExplorePick(lot); setSelected({ lot, status: "available", prefill: { arrival, departure, rvLength: len } }); }
+        return;
+      }
       if (m.type === "melyos-pick") { const lot = typeof m.lot === "string" && /^[A-Za-z0-9-]{1,10}$/.test(m.lot) ? m.lot : ""; setExplorePick(lot); if (lot) setSelected({ lot, status: "available" }); return; }
       if (m.type !== "melyos-dates") return;
       const arrival = ok(m.arrive), departure = ok(m.depart), my = ++seq;
