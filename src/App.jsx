@@ -1506,7 +1506,10 @@ export default function AlohaMap() {
   const [mapTouched, setMapTouched] = useState(false);
   // Oct 22 (per Mely): Expedia-style date search above the map.
   const [lotSearch, setLotSearch] = useState(null);
-  const searchFree = lotSearch ? new Set((lotSearch.results || []).map((r) => r.lot)) : null;
+  // Nov 20 (per Mely): a site picked in the Explore form shows alone (the other free lots go gray) until it's cleared.
+  const [explorePick, setExplorePick] = useState("");
+  const searchFreeAll = lotSearch ? new Set((lotSearch.results || []).map((r) => r.lot)) : null;
+  const searchFree = searchFreeAll && explorePick && searchFreeAll.has(explorePick) ? new Set([explorePick]) : searchFreeAll;
   const searchPrefill = lotSearch ? {
     arrival: lotSearch.arrival, departure: lotSearch.departure, rvLength: lotSearch.rvLength || "",
     slideOutDriverCount: lotSearch.driverSlideOuts || "", slideOutPassengerCount: lotSearch.passengerSlideOuts || "",
@@ -1522,7 +1525,7 @@ export default function AlohaMap() {
     const on = async (e) => {
       const m = e.data || {};
       // Nov 20 (per Mely): a lot picked in the Explore form's "Lot" list opens that lot here
-      if (m.type === "melyos-pick" && typeof m.lot === "string" && /^[A-Za-z0-9-]{1,10}$/.test(m.lot)) { setSelected({ lot: m.lot, status: "available" }); return; }
+      if (m.type === "melyos-pick") { const lot = typeof m.lot === "string" && /^[A-Za-z0-9-]{1,10}$/.test(m.lot) ? m.lot : ""; setExplorePick(lot); if (lot) setSelected({ lot, status: "available" }); return; }
       if (m.type !== "melyos-dates") return;
       const arrival = ok(m.arrive), departure = ok(m.depart), my = ++seq;
       if (!arrival || !departure || departure <= arrival) { setLotSearch(null); tell({ type: "melyos-avail", available: null }); return; }
