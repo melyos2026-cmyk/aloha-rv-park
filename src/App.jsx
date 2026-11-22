@@ -1768,6 +1768,15 @@ export default function AlohaMap() {
   // match what guests actually saw). One single coordinate system now,
   // used identically in both edit and guest mode — guaranteed WYSIWYG.
   const [draggingEmoji, setDraggingEmoji] = useState(null);
+  // Nov 22 (per Mely — "como lo hacemos fácil", like CampHands): quick tools
+  // in edit mode. "Add a row": type a prefix, first number and how many, then
+  // click the first and last lot on the map — the row is drawn evenly spaced
+  // and turned to follow that line. Plus "Copy lot" and Undo (Ctrl+Z).
+  const [rowTool, setRowTool] = useState({ prefix: "", start: 1, count: 10, depth: 0, step: null, p1: null, hover: null });
+  const histRef = useRef([]);
+  const lastSnapRef = useRef(null);
+  const undoingRef = useRef(false);
+  const [histLen, setHistLen] = useState(0);
   const emojiDragOffsetRef = useRef({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [editorRole, setEditorRole] = useState(null); // null | 'master_admin' | 'park_admin'
@@ -1800,6 +1809,94 @@ export default function AlohaMap() {
   // Oct 29 (per Mely — Android phone): narrow map = phone layout. Lot labels are sized to
   // fit inside each lot (turned sideways in tall, thin lots) so they never run into each
   // other, and small +/- buttons on the map zoom in to read them. Desktop is unchanged.
+  useEffect(() => { histRef.current = []; setHistLen(0); lastSnapRef.current = { l: draftLots, r: rotations }; // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode]);
+  useEffect(() => {
+    if (!editMode || dragging) return;
+    const cur = { l: draftLots, r: rotations };
+    if (undoingRef.current) { undoingRef.current = false; lastSnapRef.current = cur; return; }
+    const last = lastSnapRef.current;
+    if (last && (last.l !== cur.l || last.r !== cur.r)) {
+      histRef.current.push(last);
+      if (histRef.current.length > 60) histRef.current.shift();
+      setHistLen(histRef.current.length);
+    }
+    lastSnapRef.current = cur;
+  }, [draftLots, rotations, dragging, editMode]);
+  const undoMap = () => {
+    const prev = histRef.current.pop();
+    setHistLen(histRef.current.length);
+    if (!prev) return;
+    undoingRef.current = true;
+    setDraftLots(prev.l);
+    setRotations(prev.r);
+  };
+  useEffect(() => {
+    if (!editMode) return;
+    const onKey = (e) => {
+      const t = e.target && e.target.tagName;
+      if (t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); undoMap(); }
+      if (e.key === "Escape") setRowTool(r => ({ ...r, step: null, p1: null, hover: null }));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode]);
+  const nextLotName = (name, taken) => {
+    const m = String(name).match(/^(.*?)(\d+)([^\d]*)$/);
+    let n = 1, i = 0;
+    while (i++ < 999) {
+      const cand = m ? `${m[1]}${parseInt(m[2], 10) + n}${m[3]}` : `${name}-${n + 1}`;
+      if (!taken[cand]) return cand;
+      n++;
+    }
+    return `${name}-copy`;
+  };
+  const copyLot = (lot) => {
+    const g = draftLots[lot]; if (!g) return;
+    const name = nextLotName(lot, draftLots);
+    const [x, y, w, h] = g;
+    const nx = Math.min(100 - w, Math.round((x + w + 0.4) * 10) / 10);
+    setDraftLots(prev => ({ ...prev, [name]: [nx, y, w, h] }));
+    if (rotations[lot]) setRotations(prev => ({ ...prev, [name]: prev[lot] }));
+    if (lotColors[lot]) setLotColors(prev => ({ ...prev, [name]: prev[lot] }));
+    if (lotShapes[lot]) setLotShapes(prev => ({ ...prev, [name]: prev[lot] }));
+    setActiveEditLot(name);
+  };
+  const placeRow = (p1, p2) => {
+    const count = Math.max(1, Math.min(80, parseInt(rowTool.count, 10) || 1));
+    const start = parseInt(rowTool.start, 10) || 1;
+    const prefix = String(rowTool.prefix || "").toUpperCase().trim();
+    const W = scale.w || 900, H = scale.h || 900 * MAP_ASPECT_RATIO;
+    const dxp = (p2.x - p1.x) / 100 * W, dyp = (p2.y - p1.y) / 100 * H;
+    const len = Math.hypot(dxp, dyp);
+    const spacing = count > 1 ? len / (count - 1) : 40;
+    const sizes = Object.values(draftLots);
+    const avgW = sizes.length ? sizes.reduce((t, v) => t + v[2], 0) / sizes.length / 100 * W : 30;
+    const avgH = sizes.length ? sizes.reduce((t, v) => t + v[3], 0) / sizes.length / 100 * H : 60;
+    const wpx = count > 1 ? Math.max(6, spacing * 0.86) : avgW;
+    const depthPx = Number(rowTool.depth) > 0 ? Number(rowTool.depth) / 100 * W : Math.max(wpx * 1.6, Math.min(avgH, wpx * 3));
+    const angle = Math.round(Math.atan2(dyp, dxp) * 180 / Math.PI);
+    const r1 = (v) => Math.round(v * 10) / 10;
+    const lots = {}, rots = {};
+    for (let i = 0; i < count; i++) {
+      const t = count > 1 ? i / (count - 1) : 0;
+      const cx = (p1.x + (p2.x - p1.x) * t) / 100 * W, cy = (p1.y + (p2.y - p1.y) * t) / 100 * H;
+      const name = `${prefix}${start + i}`;
+      lots[name] = [r1((cx - wpx / 2) / W * 100), r1((cy - depthPx / 2) / H * 100), r1(wpx / W * 100), r1(depthPx / H * 100)];
+      rots[name] = angle;
+    }
+    const clash = Object.keys(lots).filter(n => draftLots[n]);
+    if (clash.length && !window.confirm(`These lots already exist and will be moved: ${clash.slice(0, 8).join(", ")}${clash.length > 8 ? "…" : ""}. Continue?`)) {
+      setRowTool(r => ({ ...r, step: null, p1: null, hover: null }));
+      return;
+    }
+    setDraftLots(prev => ({ ...prev, ...lots }));
+    setRotations(prev => ({ ...prev, ...rots }));
+    setRowTool(r => ({ ...r, start: start + count, step: null, p1: null, hover: null }));
+    setActiveEditLot(null);
+  };
   const isNarrowMap = !editMode && (scale.w || 900) < 640;
   function zoomMapTo(target) {
     hasInteractedRef.current = true;
@@ -2304,6 +2401,32 @@ export default function AlohaMap() {
             alt={`${companyProfile.company_name} Map`}
             style={{ width:"100%", height:"auto", aspectRatio:`auto ${MAP_W} / ${MAP_H}`, display:"block", borderRadius:12, boxShadow:"0 4px 24px rgba(0,0,0,0.18)" }}
           />
+          {editMode && rowTool.step && (() => {
+            const pt = (e) => { const r = containerRef.current.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * 100, y: (e.clientY - r.top) / r.height * 100 }; };
+            const a = rowTool.p1, b = rowTool.hover;
+            return (
+              <div
+                onMouseMove={(e) => { const p = pt(e); setRowTool(r => ({ ...r, hover: p })); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const p = pt(e);
+                  if (rowTool.step === "p1") setRowTool(r => ({ ...r, step: "p2", p1: p }));
+                  else placeRow(rowTool.p1, p);
+                }}
+                style={{ position:"absolute", inset:0, zIndex:3000, cursor:"crosshair", background:"rgba(8,184,216,0.06)" }}
+              >
+                <div style={{ position:"absolute", left:"50%", top:8, transform:"translateX(-50%)", background:"#0f2540", color:"#fff", padding:"6px 12px", borderRadius:999, fontSize:13, fontWeight:600, pointerEvents:"none", whiteSpace:"nowrap" }}>
+                  {rowTool.step === "p1" ? `Click the center of the FIRST lot (${(rowTool.prefix||"").toUpperCase()}${rowTool.start})` : `Now click the center of the LAST lot (${(rowTool.prefix||"").toUpperCase()}${(parseInt(rowTool.start,10)||1) + (parseInt(rowTool.count,10)||1) - 1}) · Esc to cancel`}
+                </div>
+                {a && (
+                  <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position:"absolute", inset:0, pointerEvents:"none" }}>
+                    {b && <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#08b8d8" strokeWidth="0.5" vectorEffect="non-scaling-stroke" style={{ strokeWidth:3 }} strokeDasharray="6 4" />}
+                    {b && (() => { const n = Math.max(1, parseInt(rowTool.count,10)||1); return Array.from({ length:n }, (_, i) => { const t = n > 1 ? i/(n-1) : 0; return <circle key={i} cx={a.x + (b.x-a.x)*t} cy={a.y + (b.y-a.y)*t} r="0.6" fill="#fbbf24" stroke="#0f2540" strokeWidth="0.15" />; }); })()}
+                  </svg>
+                )}
+              </div>
+            );
+          })()}
           {/* Snap Lines */}
           {editMode && snapLines.x !== null && (
             <div style={{ position:"absolute", left:snapLines.x, top:0, width:1, height:"100%", background:"#f59e0b", zIndex:1000, pointerEvents:"none" }} />
@@ -2947,6 +3070,41 @@ export default function AlohaMap() {
                 </button>
               );
             })()}
+          </div>
+          )}
+
+          {/* Nov 22 (per Mely): quick tools — add a whole row, copy a lot, undo. */}
+          {isAdmin && (
+          <div className="ed-section" style={{ borderColor:"#08b8d8", background:"#ecfeff" }}>
+            <div className="ed-section-head">
+              <h4 className="ed-title">⚡ Add a row of lots</h4>
+              <button type="button" className="ed-btn ed-btn-secondary" disabled={!histLen} style={{ opacity: histLen ? 1 : .45 }} onClick={undoMap} title="Undo (Ctrl+Z)">↶ Undo</button>
+            </div>
+            <div style={{ fontSize:12.5, color:"#475569", margin:"0 0 8px", lineHeight:1.45 }}>
+              Type the letter, first number and how many lots. Then click the <b>first</b> lot and the <b>last</b> lot on the map — the whole row is drawn for you, lined up with the road.
+            </div>
+            <div className="ed-row" style={{ gap:6, flexWrap:"wrap" }}>
+              <label style={{ display:"flex", flexDirection:"column", fontSize:11, fontWeight:700, color:"#334155" }}>LETTER
+                <input className="ed-input" value={rowTool.prefix} onChange={e=>setRowTool(r=>({ ...r, prefix:e.target.value.toUpperCase().slice(0,6) }))} placeholder="B" style={{ width:64 }} /></label>
+              <label style={{ display:"flex", flexDirection:"column", fontSize:11, fontWeight:700, color:"#334155" }}>FIRST #
+                <input className="ed-input" type="number" min="0" value={rowTool.start} onChange={e=>setRowTool(r=>({ ...r, start:e.target.value }))} style={{ width:72 }} /></label>
+              <label style={{ display:"flex", flexDirection:"column", fontSize:11, fontWeight:700, color:"#334155" }}>HOW MANY
+                <input className="ed-input" type="number" min="1" max="80" value={rowTool.count} onChange={e=>setRowTool(r=>({ ...r, count:e.target.value }))} style={{ width:72 }} /></label>
+              <label style={{ display:"flex", flexDirection:"column", fontSize:11, fontWeight:700, color:"#334155" }}>LOT DEPTH %
+                <input className="ed-input" type="number" min="0" max="40" step="0.5" value={rowTool.depth} onChange={e=>setRowTool(r=>({ ...r, depth:e.target.value }))} title="0 = automatic" style={{ width:72 }} /></label>
+            </div>
+            <div className="ed-row" style={{ gap:6, marginTop:8 }}>
+              <button type="button" className="ed-btn ed-btn-primary" style={{ flex:1 }} onClick={() => setRowTool(r => ({ ...r, step:"p1", p1:null, hover:null }))}>
+                {rowTool.step ? "Click on the map…" : "Draw the row on the map"}
+              </button>
+              {rowTool.step && <button type="button" className="ed-btn ed-btn-secondary" onClick={() => setRowTool(r => ({ ...r, step:null, p1:null, hover:null }))}>Cancel</button>}
+            </div>
+            {activeEditLot && draftLots[activeEditLot] && (
+              <button type="button" className="ed-btn ed-btn-secondary ed-btn-block" style={{ marginTop:8 }} onClick={() => copyLot(activeEditLot)}>
+                ⧉ Copy lot {activeEditLot} → {nextLotName(activeEditLot, draftLots)}
+              </button>
+            )}
+            <div style={{ fontSize:11.5, color:"#64748b", marginTop:6 }}>Tip: Ctrl+Z undoes the last change. Nothing is live until you press <b>Save All Changes</b>.</div>
           </div>
           )}
 
