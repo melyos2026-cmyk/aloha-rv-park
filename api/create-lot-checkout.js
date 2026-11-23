@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { calculateProcessingFee, customerFeeRatio, splitServiceFeeCents, ONLINE_SERVICE_FEE_LABEL, ONLINE_SERVICE_FEE_DESCRIPTION } from './_serviceFee.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const supabase = createClient(
@@ -55,12 +56,8 @@ function calcStay(arrivalStr, departureStr, hasWeekly) {
   return { isYearly: false, months, weeks, extraDays, totalNights };
 }
 
-// Aug 5 (per Mely): same processing-fee model as every other charge in the
-// system — 4% of the charge, or a $1.50 fixed minimum, whichever is
-// greater (guarantees real margin even on small/short bookings).
-function calculateProcessingFee(amount) {
-  return Math.max(amount * 0.04, 1.5);
-}
+// Nov 22: the fee (3.5%, minimum $2.25 — was still 4% / $1.50 here) and the park's split come
+// from ./_serviceFee.js, same as the website and the admin.
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -301,7 +298,7 @@ export default async function handler(req, res) {
     // pattern as every other checkout in the system. Falls back to a
     // normal unsplit charge if not connected yet, so bookings still work.
     const subtotalCents = lineItems.reduce((sum, li) => sum + li.price_data.unit_amount * li.quantity, 0);
-    const processingFeeCents = Math.round(calculateProcessingFee(subtotalCents / 100) * 100);
+    const fullFeeCents = Math.round(calculateProcessingFee(subtotalCents / 100) * 100);
 
     // Aug 5 (per Mely): sales tax — one company-wide rate + mode, shared
     // across propane/reservations/rent (varies by county, e.g. Aloha is
@@ -332,28 +329,29 @@ export default async function handler(req, res) {
 
     const { data: feeSettingsRow } = await supabase
       .from('company_fee_settings')
-      .select('pass_processing_fee_to_resident')
+      .select('*')
       .eq('company_id', companyRow?.id)
       .maybeSingle();
-    const passFeeToResident = feeSettingsRow?.pass_processing_fee_to_resident !== false;
+    // Nov 22 (per Mely): the park's split of the Online Service Fee (Fee Settings).
+    const { customerCents: processingFeeCents, parkCents: parkFeeCents } = splitServiceFeeCents(fullFeeCents, customerFeeRatio(feeSettingsRow));
 
-    if (passFeeToResident) {
+    if (processingFeeCents > 0) {
       lineItems.push({
         price_data: {
           currency: 'usd',
-          product_data: { name: 'Card Processing Fee' },
+          product_data: { name: ONLINE_SERVICE_FEE_LABEL, description: ONLINE_SERVICE_FEE_DESCRIPTION },
           unit_amount: processingFeeCents,
         },
         quantity: 1,
       });
     }
 
-    const totalChargeCents = subtotalCents + taxCents + (passFeeToResident ? processingFeeCents : 0);
+    const totalChargeCents = subtotalCents + taxCents + processingFeeCents;
     // Aloha's share is the full booking subtotal PLUS all of the tax
     // (theirs to remit) — MelyOS's cut is only the processing fee, taken
     // from the resident's payment if they're covering it, or otherwise
     // out of the park's own subtotal.
-    const alohaShareCents = subtotalCents + taxCents + (passFeeToResident ? 0 : -processingFeeCents);
+    const alohaShareCents = subtotalCents + taxCents + -parkFeeCents;
     const melyOsShareCents = Math.max(totalChargeCents - alohaShareCents, 0);
 
     const canSplit = parkSettingsRow?.stripe_connect_account_id && parkSettingsRow?.stripe_connect_onboarded;
@@ -369,7 +367,7 @@ export default async function handler(req, res) {
       customer_email: customerEmail || undefined,
       line_items: lineItems,
       // Oct 13 (per Mely): policy shown on Stripe's pay button before the customer pays.
-      custom_text: { submit: { message: 'Cancellations: the card processing fee is not refunded. A $15 fee applies to any payment dispute or chargeback.' } },
+      custom_text: { submit: { message: 'Cancellations: the Online Service Fee is not refunded. A $15 fee applies to any payment dispute or chargeback.' } },
       ...(canSplit
         ? {
             payment_intent_data: {

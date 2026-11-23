@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { previewServiceFee, useServiceFeeRatio, ONLINE_SERVICE_FEE_LABEL, ONLINE_SERVICE_FEE_DESCRIPTION } from '../lib/serviceFee';
 
 const PARK_ID = (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('park_id')) || 'aloha';
 
@@ -14,6 +15,7 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
   const [loadingPrices, setLoadingPrices] = useState(true);
   const [error, setError] = useState('');
   const [tax, setTax] = useState({ enabled: false, ratePercent: 0 });
+  const feeRatio = useServiceFeeRatio(PARK_ID, { always: true });
 
   useEffect(() => {
     fetch(`/api/propane-data?type=pricing&park_id=${PARK_ID}`)
@@ -49,7 +51,7 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
       : !!selected.taxable);
   const taxIncludedInPrice = tax.enabled && selected?.tax_mode === 'included';
   const salesTax = taxApplies ? subtotal * (tax.ratePercent / 100) : 0;
-  const processingFee = Math.max(subtotal * 0.04, 1.50);
+  const processingFee = previewServiceFee(subtotal, feeRatio);
   const total = subtotal + salesTax + processingFee;
 
   async function handleCheckout() {
@@ -200,7 +202,7 @@ export default function PropaneCheckoutModal({ lotId, onClose }) {
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 8 }}>
-            <span>Card Processing Fee</span>
+            <span title={ONLINE_SERVICE_FEE_DESCRIPTION}>{ONLINE_SERVICE_FEE_LABEL}</span>
             <span>${processingFee.toFixed(2)}</span>
           </div>
           <div style={styles.totalRow}>

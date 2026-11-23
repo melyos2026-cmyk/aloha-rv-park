@@ -36,7 +36,7 @@ async function refundBreakdown(order) {
   if (sessionId) {
     const items = await stripe.checkout.sessions.listLineItems(sessionId, { limit: 100 });
     for (const it of items.data) {
-      if (/processing fee/i.test(it.description || '')) feeCents += it.amount_total || 0;
+      if (/processing fee|online service fee/i.test(it.description || '')) feeCents += it.amount_total || 0;
     }
   }
   const totalCents = charge.amount;
@@ -198,7 +198,7 @@ export default async function handler(req, res) {
               ${breakdown && !breakdown.error ? `
               <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:12px;">
                 <tr><td style="padding:4px 0;">Total paid</td><td style="text-align:right;">${money(breakdown.totalCents)}</td></tr>
-                <tr><td style="padding:4px 0;">Card processing fee (not refundable)</td><td style="text-align:right;">− ${money(breakdown.feeCents)}</td></tr>
+                <tr><td style="padding:4px 0;">Online Service Fee (not refundable)</td><td style="text-align:right;">− ${money(breakdown.feeCents)}</td></tr>
                 <tr><td style="padding:6px 0;border-top:1px solid #ddd;"><strong>You will receive</strong></td><td style="text-align:right;border-top:1px solid #ddd;"><strong>${money(breakdown.refundCents)}</strong></td></tr>
               </table>
               <p style="font-size:13px;color:#555;">The refund goes back to the card you paid with. Banks usually show it within 5–10 business days.</p>` : ''}
@@ -252,7 +252,7 @@ export default async function handler(req, res) {
       const adminFeeCents = 0; // Oct 20 (per Mely): no administrative fee on refunds
       refundedCents = bd.refundCents;
       if (refundedCents < 50) {
-        return res.status(400).json({ error: 'After the card processing fee, nothing is left to refund. Please contact the park office.' });
+        return res.status(400).json({ error: 'After the Online Service Fee, nothing is left to refund. Please contact the park office.' });
       }
 
       // Re-check right before money moves — a second tab / double click

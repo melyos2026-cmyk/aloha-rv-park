@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { calculateProcessingFee, customerFeeRatio, splitServiceFeeCents, loadFeeSettingsRow, ONLINE_SERVICE_FEE_LABEL, ONLINE_SERVICE_FEE_DESCRIPTION } from './_serviceFee.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const supabase = createClient(
@@ -85,7 +86,11 @@ export default async function handler(req, res) {
     // (Mely: no hay tax en el propano, pero sí un cargo por procesar la
     // tarjeta).
     const subtotalCents = lineItemAmount * lineItemQty;
-    const processingFeeCents = Math.max(Math.round(subtotalCents * 0.04), 150);
+    // Nov 22 (per Mely): 3.5% / minimum $2.25 (was still 4% / $1.50 here) + the park's split of the
+    // Online Service Fee (Fee Settings). Propane always charged the buyer the full fee — still so
+    // unless the park sets a split.
+    const fullFeeCents = Math.round(calculateProcessingFee(subtotalCents / 100) * 100);
+    const { customerCents: processingFeeCents } = splitServiceFeeCents(fullFeeCents, customerFeeRatio(await loadFeeSettingsRow(supabase, company.id), { ignorePassSwitch: true }));
 
     // Sales tax — per-company rate (works for any state, not hardcoded).
     // tax_mode overrides the product's default "taxable" rule when set:
@@ -128,10 +133,10 @@ export default async function handler(req, res) {
       });
     }
 
-    line_items.push({
+    if (processingFeeCents > 0) line_items.push({
       price_data: {
         currency: 'usd',
-        product_data: { name: 'Card Processing Fee' },
+        product_data: { name: ONLINE_SERVICE_FEE_LABEL, description: ONLINE_SERVICE_FEE_DESCRIPTION },
         unit_amount: processingFeeCents,
       },
       quantity: 1,
@@ -155,7 +160,7 @@ export default async function handler(req, res) {
       ...(canSplit
         ? {
             payment_intent_data: {
-              application_fee_amount: processingFeeCents,
+              application_fee_amount: fullFeeCents,
               transfer_data: { destination: parkSettingsRow.stripe_connect_account_id },
             },
           }

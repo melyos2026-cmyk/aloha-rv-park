@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { calculateProcessingFee, customerFeeRatio, splitServiceFeeCents, loadFeeSettingsRow, ONLINE_SERVICE_FEE_LABEL, ONLINE_SERVICE_FEE_DESCRIPTION } from './_serviceFee.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const supabase = createClient(
@@ -14,12 +15,8 @@ const UNIT_LABEL = { daily: 'day(s)', monthly: 'month(s)', yearly: 'year(s)' };
 // space on another park's map is never booked or paid to Aloha. Old links default to Aloha.
 const parkFrom = (body) => String((body && body.parkId) || 'aloha').replace(/[^a-z0-9_-]/gi, '').slice(0, 60) || 'aloha';
 
-// Aug 6 (per Mely): same processing-fee model as every other charge in the
-// system — 4% of the charge, or a $1.50 fixed minimum, whichever is
-// greater (guarantees real margin even on small/short bookings).
-function calculateProcessingFee(amount) {
-  return Math.max(amount * 0.04, 1.5);
-}
+// Nov 22: the fee (3.5%, minimum $2.25 — was still 4% / $1.50 here) and the park's split come
+// from ./_serviceFee.js, same as the website and the admin.
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -105,7 +102,7 @@ export default async function handler(req, res) {
         mode: 'subscription',
         payment_method_types: ['card'],
         // Oct 13 (per Mely): policy shown on Stripe's pay button before the customer pays.
-        custom_text: { submit: { message: 'Cancellations: the card processing fee is not refunded. A $15 fee applies to any payment dispute or chargeback.' } },
+        custom_text: { submit: { message: 'Cancellations: the Online Service Fee is not refunded. A $15 fee applies to any payment dispute or chargeback.' } },
         customer_email: customerEmail || undefined,
         line_items: [{
           price_data: {
@@ -146,17 +143,19 @@ export default async function handler(req, res) {
       });
     } else {
       const lineItemAmount = Math.round(unitAmount * qty);
-      const processingFeeCents = Math.round(calculateProcessingFee(lineItemAmount / 100) * 100);
-      const totalChargeCents = lineItemAmount + processingFeeCents;
-      // MelyOS's cut is only the processing fee; Aloha gets the full
-      // storage charge — same split model as every other checkout.
-      const melyOsShareCents = canSplit ? processingFeeCents : 0;
+      // Nov 22 (per Mely): the park's split of the Online Service Fee (Fee Settings). Storage always
+      // charged the customer the full fee — still so unless the park sets a split.
+      const fullFeeCents = Math.round(calculateProcessingFee(lineItemAmount / 100) * 100);
+      const { customerCents: processingFeeCents } = splitServiceFeeCents(fullFeeCents, customerFeeRatio(await loadFeeSettingsRow(supabase, companyRow?.id), { ignorePassSwitch: true }));
+      // MelyOS's cut is only the full fee (the customer's part + the park's part); the park gets the
+      // storage charge minus its part of the fee — same split model as every other checkout.
+      const melyOsShareCents = canSplit ? fullFeeCents : 0;
 
       session = await stripe.checkout.sessions.create({
         mode: 'payment',
         payment_method_types: ['card'],
         // Oct 13 (per Mely): policy shown on Stripe's pay button before the customer pays.
-        custom_text: { submit: { message: 'Cancellations: the card processing fee is not refunded. A $15 fee applies to any payment dispute or chargeback.' } },
+        custom_text: { submit: { message: 'Cancellations: the Online Service Fee is not refunded. A $15 fee applies to any payment dispute or chargeback.' } },
         customer_email: customerEmail || undefined,
         line_items: [
           {
@@ -170,14 +169,14 @@ export default async function handler(req, res) {
             },
             quantity: 1,
           },
-          {
+          ...(processingFeeCents > 0 ? [{
             price_data: {
               currency: 'usd',
-              product_data: { name: 'Card Processing Fee' },
+              product_data: { name: ONLINE_SERVICE_FEE_LABEL, description: ONLINE_SERVICE_FEE_DESCRIPTION },
               unit_amount: processingFeeCents,
             },
             quantity: 1,
-          },
+          }] : []),
         ],
         ...(canSplit
           ? {

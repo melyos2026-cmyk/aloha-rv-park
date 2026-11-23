@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { previewServiceFee, useServiceFeeRatio, ONLINE_SERVICE_FEE_LABEL, ONLINE_SERVICE_FEE_DESCRIPTION } from '../lib/serviceFee';
 
 const LABELS = { daily: 'Daily', monthly: 'Monthly', yearly: 'Yearly' };
 const UNIT_LABELS = { daily: 'day(s)', monthly: 'month(s)', yearly: 'year(s)' };
@@ -17,6 +18,7 @@ export default function StorageCheckoutModal({ lotId, lotInfo, notAvailable = fa
   const [isSubscription, setIsSubscription] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const feeRatio = useServiceFeeRatio((typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('park_id')) || 'aloha', { always: true });
 
   const rate =
     billingType === 'daily' ? lotInfo?.price_daily :
@@ -30,7 +32,7 @@ export default function StorageCheckoutModal({ lotId, lotInfo, notAvailable = fa
   // payments; subscriptions take the platform's cut from Aloha's share
   // instead of adding a line item (Stripe subscriptions can't mix a
   // recurring price with a one-time fee amount cleanly).
-  const processingFee = isSubscription ? 0 : Math.max(subtotal * 0.04, 1.50);
+  const processingFee = isSubscription ? 0 : previewServiceFee(subtotal, feeRatio);
   const total = subtotal + processingFee;
 
   function handleBillingChange(type) {
@@ -194,7 +196,7 @@ export default function StorageCheckoutModal({ lotId, lotInfo, notAvailable = fa
                 <span>${subtotal.toFixed(2)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Card Processing Fee</span>
+                <span title={ONLINE_SERVICE_FEE_DESCRIPTION}>{ONLINE_SERVICE_FEE_LABEL}</span>
                 <span>${processingFee.toFixed(2)}</span>
               </div>
             </div>
